@@ -77,7 +77,7 @@ class LineChartPage(QWidget):
         self.bottom_layout.setSpacing(10)
         
         # 左下角文本标签："37.5秒"
-        self.bottom_left_label = QLabel("37.5秒")
+        self.bottom_left_label = QLabel("37.5秒前")
         self.bottom_left_label.setStyleSheet("font-family: 'Segoe UI'; font-size: 12px; color: rgb(100, 100, 100);")
         
         # 右下角文本标签："当前范围"

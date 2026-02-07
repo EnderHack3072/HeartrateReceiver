@@ -2,7 +2,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSpacerItem, QSizePolicy
 from qfluentwidgets import (
     CardWidget, TitleLabel, BodyLabel, SubtitleLabel,
-    PushButton, PrimaryPushButton, SegmentedWidget, CheckBox, ScrollArea
+    PushButton, PrimaryPushButton, SegmentedWidget, CheckBox, ScrollArea,
+    Theme, setTheme
 )
 
 class SettingsInterface(QWidget):
@@ -38,6 +39,13 @@ class SettingsInterface(QWidget):
         # 重新读取悬浮窗始终置顶设置
         always_on_top = self.parent.settings_manager.get("floating_window_always_on_top", True)
         self.always_on_top_checkbox.setChecked(always_on_top)
+        
+        # 重新读取主题设置
+        theme = self.parent.settings_manager.get("theme", "light")
+        if theme == "auto":
+            # 如果之前是跟随系统，默认使用浅色主题
+            theme = "light"
+        self.theme_segmented.setCurrentItem(theme)
     
     def showEvent(self, event):
         """当界面显示时调用，用于更新设置状态"""
@@ -170,17 +178,34 @@ class SettingsInterface(QWidget):
         self.empty_layout2.addItem(spacer2)
         self.scroll_layout.addWidget(self.empty_card2)
         
-        # 添加第3个空卡片，与第一张卡片大小相同
-        self.empty_card3 = CardWidget(self.scroll_content)
-        self.empty_card3.setMinimumHeight(min_card_height)
-        self.empty_layout3 = QVBoxLayout(self.empty_card3)
-        self.empty_layout3.setSpacing(12)
-        self.empty_layout3.setContentsMargins(20, 20, 20, 20)
-        self.empty_layout3.addWidget(BodyLabel("空卡片 4"))
-        # 添加占位控件，模拟第一张卡片的高度
-        spacer3 = QSpacerItem(0, 100, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        self.empty_layout3.addItem(spacer3)
-        self.scroll_layout.addWidget(self.empty_card3)
+        # 添加主题设置卡片
+        self.theme_card = CardWidget(self.scroll_content)
+        self.theme_card.setMinimumHeight(min_card_height)
+        self.theme_layout = QVBoxLayout(self.theme_card)
+        self.theme_layout.setSpacing(12)
+        self.theme_layout.setContentsMargins(20, 20, 20, 20)
+        
+        # 主题设置标题
+        self.theme_title = BodyLabel("主题设置")
+        self.theme_layout.addWidget(self.theme_title)
+        
+        # 主题设置分段控制器
+        self.theme_segmented = SegmentedWidget(self.scroll_content)
+        self.theme_segmented.addItem("light", "浅色主题")
+        self.theme_segmented.addItem("dark", "深色主题")
+        
+        # 设置当前选中项
+        theme = self.parent.settings_manager.get("theme", "light")
+        if theme == "auto":
+            # 如果之前是跟随系统，默认使用浅色主题
+            theme = "light"
+        self.theme_segmented.setCurrentItem(theme)
+        
+        # 连接分段控制器信号
+        self.theme_segmented.currentItemChanged.connect(self.on_theme_changed)
+        
+        self.theme_layout.addWidget(self.theme_segmented)
+        self.scroll_layout.addWidget(self.theme_card)
         
         # 添加上下缓冲空间
         self.scroll_layout.addSpacing(20)
@@ -239,3 +264,17 @@ class SettingsInterface(QWidget):
             # 更新窗口标志
             self.parent.heart_rate_window.update_window_flags()
             print("悬浮窗窗口标志已更新")
+    
+    def on_theme_changed(self, item):
+        """主题设置变化处理"""
+        # 更新设置并保存到文件
+        self.parent.settings_manager.set("theme", item)
+        print(f"设置已保存：theme = {item}")
+        
+        # 根据选择的主题设置对应的主题
+        if item == "light":
+            setTheme(Theme.LIGHT)
+            print("主题已设置为：浅色主题")
+        elif item == "dark":
+            setTheme(Theme.DARK)
+            print("主题已设置为：深色主题")

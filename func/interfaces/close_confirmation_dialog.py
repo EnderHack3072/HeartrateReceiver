@@ -17,7 +17,6 @@ class CloseConfirmationDialog(Dialog):
         # 创建"下次不再提示"复选框
         self.dont_ask_checkbox = CheckBox("下次不再提示", self)
         
-        # 找到并隐藏导致白块的buttonGroup框架
         button_group = self.findChild(type(self), "buttonGroup")
         if button_group is None:
             from PyQt5.QtWidgets import QFrame
@@ -25,9 +24,7 @@ class CloseConfirmationDialog(Dialog):
         if button_group:
             button_group.hide()
         
-        # 隐藏重复的标题标签，避免窗口上方出现多余的"关闭确认"文本
         from PyQt5.QtWidgets import QLabel
-        # 找到并隐藏windowTitleLabel（窗口标题栏标签），避免与内容区域标题重复
         window_title_label = self.findChild(QLabel, "windowTitleLabel")
         if window_title_label:
             window_title_label.hide()

@@ -8,12 +8,15 @@ import sys
 import base64
 from io import BytesIO
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction
+from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction, QWidget
 from PyQt5.QtGui import QIcon, QPixmap
-from qfluentwidgets import (InfoBar, InfoBarPosition,FluentWindow, NavigationItemPosition,FluentIcon)
+from qfluentwidgets import (InfoBar, InfoBarPosition,FluentWindow, NavigationItemPosition,FluentIcon, IconInfoBadge, InfoBadgePosition, Theme, setTheme, isDarkTheme, qconfig, setThemeColor)
 
 # 导入base64编码的图标
 from func.icon import ICON_ICO
+
+# 导入获取系统主题色的函数
+from qframelesswindow.utils import getSystemAccentColor
 
 # 从base64数据创建QIcon
 def get_icon_from_base64(base64_data):
@@ -36,7 +39,6 @@ from func.core import HeartRateMonitorCore, DeviceScanThread, HeartRateMonitorTh
 from func.interfaces import HomeInterface, HeartRateInterface, WidgetsInterface, SettingsInterface
 from func.interfaces.heart_rate_window import HeartRateWindow
 from func.interfaces.close_confirmation_dialog import CloseConfirmationDialog
-from func.http_server import HeartRateHTTPServer
 from func.settings_manager import SettingsManager
 from func.memory_share import MemoryShareManager
 
@@ -58,8 +60,7 @@ class HeartRateMonitorWindow(FluentWindow):
         self.user_disconnecting = False  # 标记用户是否正在主动断开连接
         self.is_disconnecting = False  # 标记是否正在执行断开连接操作，防止重复调用
         
-        # 初始化 HTTP 服务器
-        self.http_server = HeartRateHTTPServer(port=3030)
+
         
         # 初始化内存共享管理器
         self.memory_share_manager = MemoryShareManager()
@@ -72,10 +73,13 @@ class HeartRateMonitorWindow(FluentWindow):
         self.settings_interface = SettingsInterface(self)
         
         # 添加到导航栏
-        self.addSubInterface(self.home_interface, FluentIcon.BLUETOOTH, "设备连接", NavigationItemPosition.TOP)
+        self.bluetooth_item = self.addSubInterface(self.home_interface, FluentIcon.BLUETOOTH, "设备连接", NavigationItemPosition.TOP)
         self.addSubInterface(self.heart_rate_interface, FluentIcon.HEART, "心率显示", NavigationItemPosition.TOP)
         self.addSubInterface(self.widgets_interface, FluentIcon.LINK, "小组件", NavigationItemPosition.TOP)
         self.addSubInterface(self.settings_interface, FluentIcon.SETTING, "设置", NavigationItemPosition.TOP)
+        
+        # 在蓝牙图标上添加 IconInfoBadge，初始为错误状态（红色）
+        self.bluetooth_badge = IconInfoBadge.error(FluentIcon.CANCEL_MEDIUM, parent=self, target=self.bluetooth_item, position=InfoBadgePosition.TOP_RIGHT)
         
         # 不需要监听导航栏，直接在SettingsInterface的showEvent中更新设置
         
@@ -84,6 +88,31 @@ class HeartRateMonitorWindow(FluentWindow):
         
         # 初始化系统托盘图标
         self.init_tray_icon()
+        
+        # 初始化主题设置
+        # 1. 获取系统主题色并设置为组件库的主题色
+        import sys
+        if sys.platform in ["win32", "darwin"]:
+            try:
+                system_color = getSystemAccentColor()
+                print(f"[Theme] 获取到的系统主题色: {system_color}")
+                setThemeColor(system_color, save=False)
+                print(f"[Theme] 已设置主题色为系统色: {system_color}")
+            except Exception as e:
+                print(f"[Theme] 获取系统主题色失败: {e}")
+        
+        # 2. 读取保存的主题设置并应用
+        theme = self.settings_manager.get("theme", "light")
+        if theme == "light":
+            setTheme(Theme.LIGHT)
+            print("[Theme] 已应用保存的主题: 浅色主题")
+        elif theme == "dark":
+            setTheme(Theme.DARK)
+            print("[Theme] 已应用保存的主题: 深色主题")
+        else:
+            # 默认使用浅色主题
+            setTheme(Theme.LIGHT)
+            print("[Theme] 已应用默认主题: 浅色主题")
         
         # 软件启动时自动执行一次设备扫描
         QTimer.singleShot(600, self.start_scan)
@@ -111,6 +140,9 @@ class HeartRateMonitorWindow(FluentWindow):
     def start_scan(self):
         self.home_interface.scan_button.setEnabled(False)
         self.home_interface.scan_button.setText("扫描中...")
+        # 设置静止进度条颜色为 #009FAA
+        from PyQt5.QtGui import QColor
+        self.home_interface.progress_bar.setCustomBarColor(QColor(0, 159, 170), QColor(0, 130, 140))
         # 显示不确定进度条，隐藏普通进度条
         self.home_interface.progress_bar.hide()
         self.home_interface.indeterminate_bar.show()
@@ -251,8 +283,7 @@ class HeartRateMonitorWindow(FluentWindow):
         self.heart_rate_interface.update_heart_rate(heart_rate)
         if self.heart_rate_window:
             self.heart_rate_window.update_heart_rate(heart_rate)
-        # 更新 HTTP 服务器的心率数据
-        self.http_server.update_heart_rate(heart_rate)
+
         # 更新共享内存的心率数据
         self.memory_share_manager.update_heart_rate(heart_rate)
 
@@ -262,6 +293,18 @@ class HeartRateMonitorWindow(FluentWindow):
         self.heart_rate_interface.update_status(status)
         if self.heart_rate_window:
             self.heart_rate_window.update_status(status)
+        
+        # 根据连接状态更新蓝牙图标徽章
+        if "设备连接成功" in status:
+            # 设备连接成功，显示绿色徽章和成功图标
+            self.bluetooth_badge.hide()
+            self.bluetooth_badge = IconInfoBadge.success(FluentIcon.ACCEPT_MEDIUM, parent=self, target=self.bluetooth_item, position=InfoBadgePosition.TOP_RIGHT)
+            self.bluetooth_badge.show()
+        elif "已断开连接" in status or "请先连接设备" in status:
+            # 设备断开连接，显示红色徽章和错误图标
+            self.bluetooth_badge.hide()
+            self.bluetooth_badge = IconInfoBadge.error(FluentIcon.CANCEL_MEDIUM, parent=self, target=self.bluetooth_item, position=InfoBadgePosition.TOP_RIGHT)
+            self.bluetooth_badge.show()
     
     # 断开设备
     def disconnect_device(self):
@@ -361,7 +404,7 @@ class HeartRateMonitorWindow(FluentWindow):
             self.core.monitor_thread.wait()
             self.core.monitor_thread = None
         
-        self.http_server.stop()
+
         
         # 关闭共享内存
         self.memory_share_manager.close()
@@ -379,6 +422,16 @@ class HeartRateMonitorWindow(FluentWindow):
             self.show_main_window()
     
     # 关闭窗口时的处理
+    def _onThemeChangedFinished(self):
+        """主题变化完成后的处理"""
+        super()._onThemeChangedFinished()
+        
+        # 云母特效启用时需要增加重试机制
+        if self.isMicaEffectEnabled():
+            QTimer.singleShot(100, lambda: self.windowEffect.setMicaEffect(self.winId(), isDarkTheme()))
+        
+        print(f"[Theme] 主题已切换为: {'深色' if isDarkTheme() else '浅色'}")
+
     def closeEvent(self, event):
         """重写关闭事件，实现最小化到任务栏的逻辑"""
         # 检查设置
@@ -415,31 +468,7 @@ class HeartRateMonitorWindow(FluentWindow):
             # 用户取消关闭
             event.ignore()
     
-    # 启动 HTTP 服务器
-    def start_http_server(self):
-        self.http_server.start()
-        InfoBar.success(
-            title="HTTP 服务器已启动",
-            content=f"服务器运行在 http://127.0.0.1:3030",
-            orient=Qt.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            duration=3000,
-            parent=self
-        )
-    
-    # 停止 HTTP 服务器
-    def stop_http_server(self):
-        self.http_server.stop()
-        InfoBar.info(
-            title="HTTP 服务器已停止",
-            content="服务器已关闭",
-            orient=Qt.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            duration=3000,
-            parent=self
-        )
+
 
 # 主函数
 def main():
