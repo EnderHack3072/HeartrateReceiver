@@ -5,9 +5,8 @@ import win32api
 import win32con
 import win32ui
 from PIL import Image, ImageWin
-
-# 从resources模块导入base64编码的资源
 from func.resources import STARTUP_PNG
+
 
 def show_system_splash():
     """创建win32gui系统级轻量闪屏（无QApp依赖，立即显示）"""
@@ -92,3 +91,51 @@ def close_system_splash(hwnd):
     """关闭系统级闪屏"""
     if hwnd:
         win32gui.DestroyWindow(hwnd)
+
+def startup_check():
+    # 单实例检测
+    import sys
+    import ctypes
+
+    def is_single_instance():
+        """检测是否只有一个实例在运行"""
+        if sys.platform == 'win32':
+            # 创建命名互斥体
+            mutex_name = "Global\\HeartRateMonitorMutex"
+            mutex = ctypes.windll.kernel32.CreateMutexW(None, False, mutex_name)
+            last_error = ctypes.windll.kernel32.GetLastError()
+            
+            # 如果互斥体已存在，说明已有实例在运行
+            if last_error == 183:  # ERROR_ALREADY_EXISTS
+                # 尝试找到并激活现有窗口
+                try:
+                    import win32gui
+                    import win32con
+                    
+                    def enum_windows_callback(hwnd, lParam):
+                        window_title = win32gui.GetWindowText(hwnd)
+                        if "心率监测器" in window_title:
+                            # 显示窗口（如果最小化）
+                            if win32gui.IsIconic(hwnd):
+                                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                            # 激活窗口
+                            win32gui.SetForegroundWindow(hwnd)
+                            return False  # 停止枚举
+                        return True
+                    
+                    win32gui.EnumWindows(enum_windows_callback, None)
+                except Exception as e:
+                    print(f"激活现有窗口失败: {e}")
+                return False
+            return True
+        return True
+
+    # 检查是否已有实例在运行
+    if not is_single_instance():
+        print("程序已经在运行，正在切换到前台...")
+        sys.exit(0)
+
+def go():
+    global syshwnd
+    syshwnd = show_system_splash()
+    startup_check()

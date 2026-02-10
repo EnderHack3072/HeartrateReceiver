@@ -1,20 +1,15 @@
-# 导入系统级闪屏模块
-from func.splash_screen import show_system_splash, close_system_splash
-
-system_splash_hwnd = show_system_splash()
-
+import func.startup as startup
+startup.go()
 # 导入其他模块
-import sys
 import base64
 from io import BytesIO
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction, QWidget
 from PyQt5.QtGui import QIcon, QPixmap
 from qfluentwidgets import (InfoBar, InfoBarPosition,FluentWindow, NavigationItemPosition,FluentIcon, IconInfoBadge, InfoBadgePosition, Theme, setTheme, isDarkTheme, qconfig, setThemeColor)
-
 # 导入base64编码的图标
 from func.icon import ICON_ICO
-
+import sys
 # 导入获取系统主题色的函数
 from qframelesswindow.utils import getSystemAccentColor
 
@@ -47,9 +42,8 @@ class HeartRateMonitorWindow(FluentWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("心率监测器")
-        self.resize(500, 400)  # 紧凑窗口大小
-        self.setFixedSize(self.size())  # 固定窗口大小，使其不可调整
-        # 设置窗口图标（从base64资源）
+        self.resize(500, 400)
+        self.setFixedSize(self.size())
         self.setWindowIcon(get_icon_from_base64(ICON_ICO))
         
         # 初始化设置管理器
@@ -59,9 +53,6 @@ class HeartRateMonitorWindow(FluentWindow):
         self.core = HeartRateMonitorCore()
         self.user_disconnecting = False  # 标记用户是否正在主动断开连接
         self.is_disconnecting = False  # 标记是否正在执行断开连接操作，防止重复调用
-        
-
-        
         # 初始化内存共享管理器
         self.memory_share_manager = MemoryShareManager()
         self.memory_share_manager.initialize()
@@ -468,9 +459,6 @@ class HeartRateMonitorWindow(FluentWindow):
             # 用户取消关闭
             event.ignore()
     
-
-
-# 主函数
 def main():
     app = QApplication(sys.argv)
     # 创建并显示主窗口
@@ -478,7 +466,7 @@ def main():
     window.show()
     
     # 关闭系统闪屏
-    close_system_splash(system_splash_hwnd)
+    startup.close_system_splash(startup.syshwnd)
 
     sys.exit(app.exec_())
 
