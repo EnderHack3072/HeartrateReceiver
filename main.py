@@ -36,6 +36,7 @@ from func.interfaces.heart_rate_window import HeartRateWindow
 from func.interfaces.close_confirmation_dialog import CloseConfirmationDialog
 from func.settings_manager import SettingsManager
 from func.memory_share import MemoryShareManager
+from func.data_manager import DataManager
 
 # 主窗口类
 class HeartRateMonitorWindow(FluentWindow):
@@ -56,6 +57,9 @@ class HeartRateMonitorWindow(FluentWindow):
         # 初始化内存共享管理器
         self.memory_share_manager = MemoryShareManager()
         self.memory_share_manager.initialize()
+        
+        # 初始化数据管理器
+        self.data_manager = DataManager()
         
         # 创建界面实例
         self.home_interface = HomeInterface(self)
@@ -277,6 +281,9 @@ class HeartRateMonitorWindow(FluentWindow):
 
         # 更新共享内存的心率数据
         self.memory_share_manager.update_heart_rate(heart_rate)
+        
+        # 收集心率数据用于写入文件
+        self.data_manager.collect_data(heart_rate)
 
     # 更新状态信息
     def update_status(self, status):
@@ -327,15 +334,15 @@ class HeartRateMonitorWindow(FluentWindow):
         self.update_heart_rate(0)
         
         # 显示友好的断开连接提示
-        InfoBar.info(
-            title="设备已断开",
-            content="设备连接已断开，您可以重新扫描或连接其他设备",
-            orient=Qt.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            duration=4000,
-            parent=self
-        )
+        #InfoBar.info(
+        #    title="设备已断开",
+        #    content="设备连接已断开，您可以重新扫描或连接其他设备",
+        #    orient=Qt.Horizontal,
+        #    isClosable=True,
+        #    position=InfoBarPosition.TOP,
+        #    duration=4000,
+        #    parent=self
+        #)
         
         # 断开连接后返回设备连接界面
         self.stackedWidget.setCurrentWidget(self.home_interface)
@@ -396,6 +403,9 @@ class HeartRateMonitorWindow(FluentWindow):
             self.core.monitor_thread = None
         
 
+        
+        # 关闭数据管理器，确保所有数据被写入
+        self.data_manager.close()
         
         # 关闭共享内存
         self.memory_share_manager.close()

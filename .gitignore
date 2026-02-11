@@ -38,6 +38,7 @@ test/
 *.swp
 *.swo
 *~
+data/
 
 # OS
 .DS_Store
@@ -55,3 +56,6 @@ test_chart.py
 test_heart_rate_crash.py
 test_trend_chart.py
 nuitka-crash-report.xml
+todolist.md
+tkinter_DigitalWatch.pyw
+count_lines.py
