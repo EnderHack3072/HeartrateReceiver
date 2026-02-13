@@ -54,6 +54,14 @@ class HeartRateMonitorWindow(FluentWindow):
         self.core = HeartRateMonitorCore()
         self.user_disconnecting = False  # 标记用户是否正在主动断开连接
         self.is_disconnecting = False  # 标记是否正在执行断开连接操作，防止重复调用
+        
+        # 自动重连相关变量
+        self.auto_reconnect_enabled = True  # 是否启用自动重连
+        self.reconnect_attempts = 0  # 当前重连尝试次数
+        self.max_reconnect_attempts = 5  # 最大重连次数
+        self.reconnect_timer = QTimer()  # 重连定时器
+        self.reconnect_timer.setSingleShot(True)  # 单次触发
+        self.reconnect_timer.timeout.connect(self.attempt_reconnect)  # 连接超时信号
         # 初始化内存共享管理器
         self.memory_share_manager = MemoryShareManager()
         self.memory_share_manager.initialize()
@@ -255,23 +263,26 @@ class HeartRateMonitorWindow(FluentWindow):
         self.home_interface.connect_button.setEnabled(False)
         self.home_interface.disconnect_button.setEnabled(True)
         self.home_interface.scan_button.setEnabled(False)
+        self.home_interface.scan_button.setText("已连接")
         
         # 自动切换到心率显示界面
         self.stackedWidget.setCurrentWidget(self.heart_rate_interface)
 
     def on_monitor_error(self, error):
-        # 如果是用户主动断开连接，不显示提示
-        if not self.user_disconnecting:
-            InfoBar.info(
-                title="设备已断开",
-                content="设备连接已断开，您可以重新扫描或连接其他设备",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                duration=4000,
-                parent=self
-            )
-        self.disconnect_device()
+        # 如果是用户主动断开连接，不显示提示也不自动重连
+        if self.user_disconnecting:
+            self.disconnect_device()
+            return
+        
+        # 意外断开，停止监控线程
+        if self.core.monitor_thread:
+            self.core.monitor_thread.stop()
+            self.core.monitor_thread.wait()
+            self.core.monitor_thread = None
+        
+        # 开始自动重连
+        print(f"[Auto Reconnect] 检测到意外断开: {error}")
+        self.start_auto_reconnect()
     
     # 更新心率数值
     def update_heart_rate(self, heart_rate):
@@ -298,6 +309,10 @@ class HeartRateMonitorWindow(FluentWindow):
             self.bluetooth_badge.hide()
             self.bluetooth_badge = IconInfoBadge.success(FluentIcon.ACCEPT_MEDIUM, parent=self, target=self.bluetooth_item, position=InfoBadgePosition.TOP_RIGHT)
             self.bluetooth_badge.show()
+            # 重置重连计数器
+            if self.reconnect_attempts > 0:
+                print(f"[Auto Reconnect] 连接成功，重置重连计数器（之前尝试了 {self.reconnect_attempts} 次）")
+                self.reconnect_attempts = 0
         elif "已断开连接" in status or "请先连接设备" in status:
             # 设备断开连接，显示红色徽章和错误图标
             self.bluetooth_badge.hide()
@@ -322,6 +337,9 @@ class HeartRateMonitorWindow(FluentWindow):
         self.is_disconnecting = True
         self.user_disconnecting = True
         
+        # 停止自动重连
+        self.stop_auto_reconnect()
+        
         if self.core.monitor_thread:
             self.core.monitor_thread.stop()
             self.core.monitor_thread.wait()
@@ -330,6 +348,7 @@ class HeartRateMonitorWindow(FluentWindow):
         self.home_interface.connect_button.setEnabled(True)
         self.home_interface.disconnect_button.setEnabled(False)
         self.home_interface.scan_button.setEnabled(True)
+        self.home_interface.scan_button.setText("重新扫描")
         self.update_status("已断开连接")
         self.update_heart_rate(0)
         
@@ -350,6 +369,82 @@ class HeartRateMonitorWindow(FluentWindow):
         # 重置标志
         self.user_disconnecting = False
         self.is_disconnecting = False
+    
+    def start_auto_reconnect(self):
+        """开始自动重连流程"""
+        if not self.auto_reconnect_enabled:
+            return
+        
+        if self.reconnect_attempts >= self.max_reconnect_attempts:
+            print(f"[Auto Reconnect] 已达到最大重连次数 ({self.max_reconnect_attempts})，停止重连")
+            self.reconnect_attempts = 0
+            InfoBar.warning(
+                title="自动重连失败",
+                content=f"已尝试重连 {self.max_reconnect_attempts} 次，请检查设备状态",
+                orient=Qt.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=5000,
+                parent=self
+            )
+            return
+        
+        self.reconnect_attempts += 1
+        print(f"[Auto Reconnect] 准备第 {self.reconnect_attempts} 次重连...")
+        
+        # 前3次静默重连，后2次显示提示
+        if self.reconnect_attempts > 3:
+            InfoBar.info(
+                title="自动重连中",
+                content=f"正在尝试第 {self.reconnect_attempts}/{self.max_reconnect_attempts} 次重连...",
+                orient=Qt.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=2000,
+                parent=self
+            )
+        
+        # 5秒后尝试重连
+        self.reconnect_timer.start(5000)
+    
+    def attempt_reconnect(self):
+        """尝试重新连接设备"""
+        if not self.core.selected_device:
+            print("[Auto Reconnect] 没有选中的设备，无法重连")
+            return
+        
+        print(f"[Auto Reconnect] 正在执行第 {self.reconnect_attempts} 次重连...")
+        
+        # 更新状态显示
+        self.update_status(f"正在重连... (第 {self.reconnect_attempts} 次)")
+        
+        # 尝试重新连接
+        try:
+            self.core.monitor_thread = HeartRateMonitorThread(self.core.selected_device)
+            self.core.monitor_thread.heart_rate_updated.connect(self.update_heart_rate)
+            self.core.monitor_thread.connection_status.connect(self.update_status)
+            self.core.monitor_thread.error_occurred.connect(self.on_monitor_error)
+            self.core.monitor_thread.start()
+            
+            self.home_interface.connect_button.setEnabled(False)
+            self.home_interface.disconnect_button.setEnabled(True)
+            self.home_interface.scan_button.setEnabled(False)
+            self.home_interface.scan_button.setText("已连接")
+            
+            # 重置重连计数器（连接成功后）
+            # 注意：这里不立即重置，而是在连接成功后再重置
+            print(f"[Auto Reconnect] 第 {self.reconnect_attempts} 次重连已发起")
+        except Exception as e:
+            print(f"[Auto Reconnect] 重连失败: {e}")
+            # 如果重连失败，继续尝试下一次
+            self.start_auto_reconnect()
+    
+    def stop_auto_reconnect(self):
+        """停止自动重连"""
+        if self.reconnect_timer.isActive():
+            self.reconnect_timer.stop()
+        self.reconnect_attempts = 0
+        print("[Auto Reconnect] 已停止自动重连")
     
     def init_tray_icon(self):
         """初始化系统托盘图标"""
@@ -396,6 +491,9 @@ class HeartRateMonitorWindow(FluentWindow):
         # 关闭所有窗口和线程
         if self.heart_rate_window:
             self.close_heart_rate_window()
+        
+        # 停止自动重连
+        self.stop_auto_reconnect()
         
         if self.core.monitor_thread:
             self.core.monitor_thread.stop()
