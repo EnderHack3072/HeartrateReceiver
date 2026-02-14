@@ -1,6 +1,6 @@
-from PyQt5.QtCore import Qt, QTimer, QPoint
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMenu
-from PyQt5.QtGui import QPainter, QPen, QColor, QFont, QPixmap
+from PyQt6.QtCore import Qt, QTimer, QPoint
+from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMenu
+from PyQt6.QtGui import QPainter, QPen, QColor, QFont, QPixmap
 from collections import deque
 from qfluentwidgets import CardWidget
 from func.interfaces.heart_rate_interface import DynamicLineChart
@@ -96,12 +96,12 @@ class HeartRateWindow(QMainWindow):
         # 左侧文本标签："心率"
         self.top_label = QLabel("心率")
         self.top_label.setStyleSheet("font-family: 'Segoe UI'; font-size: 12px; color: rgb(100, 100, 100);")
-        self.top_label.setAlignment(Qt.AlignLeft)
+        self.top_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         
         # 右侧文本标签："当前范围"
         self.top_right_label = QLabel("当前范围")
         self.top_right_label.setStyleSheet("font-family: 'Segoe UI'; font-size: 12px; color: rgb(100, 100, 100);")
-        self.top_right_label.setAlignment(Qt.AlignRight)
+        self.top_right_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         
         # 添加弹性空间，让文本标签分别靠在两侧
         self.second_row_layout.addWidget(self.top_label)
@@ -143,7 +143,7 @@ class HeartRateWindow(QMainWindow):
     
     def mousePressEvent(self, event):
         """鼠标按下事件，根据设置决定是单击拖动还是双击拖动"""
-        if self.drag_enabled and event.button() == Qt.LeftButton:
+        if self.drag_enabled and event.button() == Qt.MouseButton.LeftButton:
             if self.drag_type == "single_click":
                 # 单击拖动
                 self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
@@ -168,7 +168,7 @@ class HeartRateWindow(QMainWindow):
     
     def mouseMoveEvent(self, event):
         """鼠标移动事件"""
-        if self.drag_enabled and event.buttons() == Qt.LeftButton and self.is_dragging:
+        if self.drag_enabled and event.buttons() == Qt.MouseButton.LeftButton and self.is_dragging:
             self.move(event.globalPos() - self.drag_position)
             event.accept()
     
@@ -196,7 +196,7 @@ class HeartRateWindow(QMainWindow):
         
         action_close = menu.addAction("关闭")
         
-        action = menu.exec_(event.globalPos())
+        action = menu.exec(event.globalPos())
         
         if action == action_always_on_top:
             self.always_on_top = action_always_on_top.isChecked()
@@ -209,9 +209,9 @@ class HeartRateWindow(QMainWindow):
     def update_window_flags(self):
         """更新窗口标志"""
         if self.always_on_top:
-            self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+            self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         else:
-            self.setWindowFlags(Qt.FramelessWindowHint)
+            self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.show()
     
     def reload_settings(self):

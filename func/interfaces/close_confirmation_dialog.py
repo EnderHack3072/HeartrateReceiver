@@ -24,7 +24,7 @@ class CloseConfirmationDialog(Dialog):
         if button_group:
             button_group.hide()
         
-        from PyQt5.QtWidgets import QLabel
+        from PyQt6.QtWidgets import QLabel
         window_title_label = self.findChild(QLabel, "windowTitleLabel")
         if window_title_label:
             window_title_label.hide()
@@ -74,7 +74,7 @@ class CloseConfirmationDialog(Dialog):
         
         # 将自定义组件添加到对话框
         self.vBoxLayout.addSpacing(8)
-        self.vBoxLayout.addWidget(self.dont_ask_checkbox, alignment=Qt.AlignCenter)
+        self.vBoxLayout.addWidget(self.dont_ask_checkbox, alignment=Qt.AlignmentFlag.AlignCenter)
         self.vBoxLayout.addSpacing(16)
         self.vBoxLayout.addWidget(self.button_container)
     

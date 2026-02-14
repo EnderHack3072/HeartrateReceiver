@@ -1,5 +1,5 @@
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSpacerItem, QSizePolicy
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSpacerItem, QSizePolicy
 from qfluentwidgets import (
     CardWidget, TitleLabel, BodyLabel, SubtitleLabel,
     PushButton, PrimaryPushButton, SegmentedWidget, CheckBox, ScrollArea,
@@ -62,8 +62,8 @@ class SettingsInterface(QWidget):
         # 创建滚动区域（使用QFluentWidgets的ScrollArea，自带fluent风格滚动条）
         self.scroll_area = ScrollArea(self)
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         # 设置滚动区域背景为透明，与整体界面融合
         self.scroll_area.setStyleSheet("border: none; background-color: transparent;")
         
@@ -227,7 +227,7 @@ class SettingsInterface(QWidget):
     def on_floating_window_drag_enabled_toggled(self, state):
         """悬浮窗拖动功能启用状态变化处理"""
         # 更新设置并保存到文件
-        is_enabled = state == Qt.Checked
+        is_enabled = state == Qt.CheckState.Checked
         self.parent.settings_manager.set("floating_window_drag_enabled", is_enabled)
         print(f"设置已保存：floating_window_drag_enabled = {is_enabled}")
         
@@ -252,7 +252,7 @@ class SettingsInterface(QWidget):
     def on_always_on_top_toggled(self, state):
         """悬浮窗始终置顶状态变化处理"""
         # 更新设置并保存到文件
-        is_always_on_top = state == Qt.Checked
+        is_always_on_top = state == Qt.CheckState.Checked
         self.parent.settings_manager.set("floating_window_always_on_top", is_always_on_top)
         print(f"设置已保存：floating_window_always_on_top = {is_always_on_top}")
         

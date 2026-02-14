@@ -1,6 +1,6 @@
-from PyQt5.QtCore import Qt, QTimer, QByteArray
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMenu
-from PyQt5.QtGui import QPixmap
+from PyQt6.QtCore import Qt, QTimer, QByteArray
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMenu
+from PyQt6.QtGui import QPixmap
 from qfluentwidgets import TitleLabel, CardWidget, BodyLabel
 from ..resources import CP2_IMAGE
 class WidgetsInterface(QWidget):
@@ -54,7 +54,7 @@ class WidgetsInterface(QWidget):
         # 实时心率波动图卡片（卡片2）
         self.card2 = CardWidget(self)
         self.card2.setFixedHeight(120)
-        self.card2.setCursor(Qt.PointingHandCursor)
+        self.card2.setCursor(Qt.CursorShape.PointingHandCursor)
         self.card2.installEventFilter(self)
         
         card2_layout = QHBoxLayout(self.card2)
@@ -71,7 +71,7 @@ class WidgetsInterface(QWidget):
         pixmap = QPixmap()
         pixmap.loadFromData(QByteArray.fromBase64(CP2_IMAGE.encode()))
         if not pixmap.isNull():
-            card2_image.setPixmap(pixmap.scaled(130, 98, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            card2_image.setPixmap(pixmap.scaled(130, 98, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         card2_image.setAlignment(Qt.AlignCenter)
         
         card2_layout.addWidget(card2_text, 1)
@@ -86,10 +86,10 @@ class WidgetsInterface(QWidget):
         """事件过滤器，用于处理卡片的点击和右键菜单"""
         if obj == self.card1:
             if event.type() == event.MouseButtonPress:
-                if event.button() == Qt.LeftButton:
+                if event.button() == Qt.MouseButton.LeftButton:
                     # 移除showHelp功能
                     return True
-                elif event.button() == Qt.RightButton:
+                elif event.button() == Qt.MouseButton.RightButton:
                     self.show_card1_context_menu(event.globalPos())
                     return True
         elif obj == self.card2:
@@ -111,7 +111,7 @@ class WidgetsInterface(QWidget):
         action_about = menu.addAction("关于")
         
         # 显示菜单并获取用户选择
-        action = menu.exec_(position)
+        action = menu.exec(position)
         
         if action == action_settings:
             print("打开OBS串流设置")
@@ -127,7 +127,7 @@ class WidgetsInterface(QWidget):
         action_about = menu.addAction("关于")
         
         # 显示菜单并获取用户选择
-        action = menu.exec_(position)
+        action = menu.exec(position)
         
         if action == action_settings:
             print("打开设置")

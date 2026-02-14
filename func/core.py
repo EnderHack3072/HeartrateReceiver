@@ -1,5 +1,5 @@
 import asyncio
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 from bleak import BleakClient, BleakScanner
 from bleak.backends.characteristic import BleakGATTCharacteristic
 
@@ -11,6 +11,10 @@ class DeviceScanThread(QThread):
     scan_finished = pyqtSignal(list)
     scan_error = pyqtSignal(str)
     
+    def __init__(self):
+        super().__init__()
+        self.filter_heart_rate_devices = False
+    
     def run(self):
         try:
             devices = asyncio.run(self.scan_devices())
@@ -20,6 +24,28 @@ class DeviceScanThread(QThread):
     
     async def scan_devices(self):
         devices = await BleakScanner.discover()
+        
+        # 如果需要筛选心率设备
+        if self.filter_heart_rate_devices:
+            filtered_devices = []
+            for device in devices:
+                try:
+                    # 尝试连接设备并检查是否有心率服务
+                    async with BleakClient(device) as client:
+                        has_heart_rate_service = False
+                        for service in client.services:
+                            # 检查服务UUID是否包含心率服务的特征
+                            # 心率服务UUID通常是 '180d'
+                            if '180d' in service.uuid.lower():
+                                has_heart_rate_service = True
+                                break
+                        if has_heart_rate_service:
+                            filtered_devices.append(device)
+                except:
+                    # 连接失败的设备跳过
+                    pass
+            return filtered_devices
+        
         return devices
 
 # 心率监测线程

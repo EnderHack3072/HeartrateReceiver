@@ -1,6 +1,6 @@
-from PyQt5.QtCore import Qt, QTimer, QPoint
-from PyQt5.QtGui import QPainter, QPen, QColor, QFont, QBrush, QPainterPath
-from PyQt5.QtWidgets import QWidget
+from PyQt6.QtCore import Qt, QTimer, QPoint
+from PyQt6.QtGui import QPainter, QPen, QColor, QFont, QBrush, QPainterPath
+from PyQt6.QtWidgets import QWidget
 from collections import deque
 import math
 
@@ -244,7 +244,7 @@ class DynamicLineChart(QWidget):
     def paintEvent(self, event):
         """绘制事件（双缓冲绘图）"""
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
         # 获取画布尺寸
         width = self.width()
@@ -269,7 +269,7 @@ class DynamicLineChart(QWidget):
         border_pen = QPen(QColor(0, 0, 0))
         border_pen.setWidth(1)
         painter.setPen(border_pen)
-        painter.setBrush(Qt.NoBrush)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRect(0, 0, width - 1, height - 1)
     
     def _draw_average_line(self, painter, width, height):
@@ -301,7 +301,7 @@ class DynamicLineChart(QWidget):
         avg_text = f"平均 {round(self.average_heart_rate)}"
         
         # 获取文本宽度
-        text_rect = painter.boundingRect(0, 0, 100, 20, Qt.AlignRight, avg_text)
+        text_rect = painter.boundingRect(0, 0, 100, 20, Qt.AlignmentFlag.AlignRight, avg_text)
         text_width = text_rect.width()
         
         # 计算文本位置：线的上方，右边缘与线的右边缘平齐
@@ -341,15 +341,15 @@ class DynamicLineChart(QWidget):
             return
         
         # 先绘制填充区域（半透明红色）
-        from PyQt5.QtGui import QBrush, QPainterPath
+        from PyQt6.QtGui import QBrush, QPainterPath
         
         # 创建填充路径
         fill_path = QPainterPath()
-        fill_path.moveTo(self.point_lst[0])
+        fill_path.moveTo(self.point_lst[0].x(), self.point_lst[0].y())
         
         # 添加所有折线点
         for i in range(1, len(self.point_lst)):
-            fill_path.lineTo(self.point_lst[i])
+            fill_path.lineTo(self.point_lst[i].x(), self.point_lst[i].y())
         
         # 闭合路径到底部
         fill_path.lineTo(width, height)
@@ -359,7 +359,7 @@ class DynamicLineChart(QWidget):
         # 设置填充颜色（半透明红色）
         fill_brush = QBrush(QColor(255,143,143,50))  # 50表示透明度
         painter.setBrush(fill_brush)
-        painter.setPen(Qt.NoPen)  # 不绘制边框
+        painter.setPen(Qt.PenStyle.NoPen)  # 不绘制边框
         painter.drawPath(fill_path)
         
         # 设置折线颜色（深红色）

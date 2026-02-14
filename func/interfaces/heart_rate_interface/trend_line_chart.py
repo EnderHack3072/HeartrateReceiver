@@ -1,6 +1,6 @@
-from PyQt5.QtCore import Qt, QTimer, QPoint
-from PyQt5.QtGui import QPainter, QPen, QColor, QBrush, QPainterPath
-from PyQt5.QtWidgets import QWidget
+from PyQt6.QtCore import Qt, QTimer, QPoint
+from PyQt6.QtGui import QPainter, QPen, QColor, QBrush, QPainterPath
+from PyQt6.QtWidgets import QWidget
 from collections import deque
 
 
@@ -35,7 +35,6 @@ class TrendLineChart(QWidget):
         
         # 平均心率相关变量
         self.average_heart_rate = 0             # 当前平均心率
-        self.average_data_points = deque(maxlen=100)  # 用于计算平均值的数据点
         self.MIN_POINTS_FOR_AVERAGE = 5         # 计算平均值所需的最小点数
         
         # 初始化Y轴范围
@@ -66,19 +65,17 @@ class TrendLineChart(QWidget):
         self.yp_queue.append(value)
         # 保存到所有历史值中（不限制长度）
         self.all_history_values.append(value)
-        # 添加到平均心率计算队列
-        self.average_data_points.append(value)
-        # 计算平均心率
+        # 计算平均心率（基于所有历史点）
         self._calculate_average_heart_rate()
     
     def _calculate_average_heart_rate(self):
         """计算平均心率，从5个点开始计算"""
-        if len(self.average_data_points) < self.MIN_POINTS_FOR_AVERAGE:
+        if len(self.all_history_values) < self.MIN_POINTS_FOR_AVERAGE:
             self.average_heart_rate = 0
             return
         
-        # 计算平均值
-        self.average_heart_rate = sum(self.average_data_points) / len(self.average_data_points)
+        # 计算所有历史点的平均值
+        self.average_heart_rate = sum(self.all_history_values) / len(self.all_history_values)
     
     def _update_y_range(self):
         """根据所有历史数据更新Y轴范围，确保所有点都不冲顶"""
@@ -218,7 +215,7 @@ class TrendLineChart(QWidget):
     def paintEvent(self, event):
         """绘制事件（双缓冲绘图）"""
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
         # 获取画布尺寸
         width = self.width()
@@ -240,7 +237,7 @@ class TrendLineChart(QWidget):
         border_pen = QPen(QColor(0, 0, 0))
         border_pen.setWidth(1)
         painter.setPen(border_pen)
-        painter.setBrush(Qt.NoBrush)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRect(0, 0, width - 1, height - 1)
     
     def _draw_average_line(self, painter, width, height):
@@ -272,7 +269,7 @@ class TrendLineChart(QWidget):
         avg_text = f"平均 {round(self.average_heart_rate)}"
         
         # 获取文本宽度
-        text_rect = painter.boundingRect(0, 0, 100, 20, Qt.AlignRight, avg_text)
+        text_rect = painter.boundingRect(0, 0, 100, 20, Qt.AlignmentFlag.AlignRight, avg_text)
         text_width = text_rect.width()
         
         # 计算文本位置：线的上方，右边缘与线的右边缘平齐
@@ -289,11 +286,11 @@ class TrendLineChart(QWidget):
         # 先绘制填充区域（半透明红色）
         # 创建填充路径
         fill_path = QPainterPath()
-        fill_path.moveTo(self.point_lst[0])
+        fill_path.moveTo(self.point_lst[0].x(), self.point_lst[0].y())
         
         # 添加所有折线点
         for i in range(1, len(self.point_lst)):
-            fill_path.lineTo(self.point_lst[i])
+            fill_path.lineTo(self.point_lst[i].x(), self.point_lst[i].y())
         
         # 闭合路径到底部
         fill_path.lineTo(width, height)
@@ -303,7 +300,7 @@ class TrendLineChart(QWidget):
         # 设置填充颜色（半透明红色），与折线图保持一致
         fill_brush = QBrush(QColor(255, 143, 143, 50))  # 50表示透明度
         painter.setBrush(fill_brush)
-        painter.setPen(Qt.NoPen)  # 不绘制边框
+        painter.setPen(Qt.PenStyle.NoPen)  # 不绘制边框
         painter.drawPath(fill_path)
         
         # 设置折线颜色（深红色），与折线图保持一致

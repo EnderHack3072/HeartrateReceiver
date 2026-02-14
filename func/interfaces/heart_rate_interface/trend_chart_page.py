@@ -1,5 +1,5 @@
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
 from qfluentwidgets import CardWidget
 from .trend_line_chart import TrendLineChart
 
@@ -23,24 +23,17 @@ class TrendChartPage(QWidget):
         self.chart_layout.setContentsMargins(12, 12, 12, 12)
         self.chart_layout.setSpacing(8)
         
-        # 创建顶部水平布局（用于放置两个文本标签）
+        # 创建顶部水平布局（用于放置文本标签）
         self.top_layout = QHBoxLayout()
         self.top_layout.setSpacing(10)
         
         # 左侧文本标签
         self.left_label = QLabel("趋势")
         self.left_label.setStyleSheet("font-family: 'Segoe UI'; font-size: 24px; font-weight: normal; color: #333;")
-        self.left_label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+        self.left_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
         
-        # 右上角设备名称标签
-        self.right_label = QLabel("请先连接设备")
-        self.right_label.setStyleSheet("font-family: 'Segoe UI'; font-size: 16px; font-weight: normal; color: #333;")
-        self.right_label.setAlignment(Qt.AlignRight | Qt.AlignBottom)
-        
-        # 添加弹性空间，让文本标签分别靠在两侧
+        # 添加文本标签
         self.top_layout.addWidget(self.left_label)
-        self.top_layout.addStretch()
-        self.top_layout.addWidget(self.right_label)
         
         # 将顶部布局添加到卡片布局
         self.chart_layout.addLayout(self.top_layout)
@@ -52,12 +45,12 @@ class TrendChartPage(QWidget):
         # 左侧文本标签："心率"
         self.top_label = QLabel("心率")
         self.top_label.setStyleSheet("font-family: 'Segoe UI'; font-size: 12px; color: rgb(100, 100, 100);")
-        self.top_label.setAlignment(Qt.AlignLeft)
+        self.top_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         
         # 右侧文本标签："当前范围"
         self.top_right_label = QLabel("当前范围")
         self.top_right_label.setStyleSheet("font-family: 'Segoe UI'; font-size: 12px; color: rgb(100, 100, 100);")
-        self.top_right_label.setAlignment(Qt.AlignRight)
+        self.top_right_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         
         # 添加弹性空间，让文本标签分别靠在两侧
         self.second_row_layout.addWidget(self.top_label)
@@ -69,7 +62,7 @@ class TrendChartPage(QWidget):
         
         # 创建动态折线图
         self.trend_chart = TrendLineChart()
-        self.trend_chart.setFixedHeight(160)  # 与其他卡片显示区域高度一致
+        self.trend_chart.setFixedHeight(180)  # 调整高度为180
         self.chart_layout.addWidget(self.trend_chart)
         
         # 创建底部水平布局（用于放置"37.5秒"和"0"）- 移到卡片内部
