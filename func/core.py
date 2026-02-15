@@ -119,11 +119,32 @@ class HeartRateMonitorCore:
     """
     心率监测器的核心功能类，处理设备连接和数据监控逻辑
     """
-    def __init__(self):
+    def __init__(self, settings_manager=None):
         self.devices = []
         self.selected_device = None
         self.monitor_thread = None
         self.scan_thread = None
+        self.settings_manager = settings_manager
+        
+        # 自动重连相关
+        self.auto_reconnect_enabled = True
+        self.max_reconnect_attempts = 5
+        self.reconnect_interval = 5
+        self.reconnect_attempts = 0
+        
+        # 如果有设置管理器，从设置中读取参数
+        if self.settings_manager:
+            self.load_settings()
+    
+    def load_settings(self):
+        """从设置管理器加载设置"""
+        if not self.settings_manager:
+            return
+        
+        self.auto_reconnect_enabled = self.settings_manager.get("auto_reconnect_enabled", True)
+        self.max_reconnect_attempts = self.settings_manager.get("auto_reconnect_attempts", 5)
+        self.reconnect_interval = self.settings_manager.get("auto_reconnect_interval", 5)
+        print(f"[Core] 自动重连设置已加载: enabled={self.auto_reconnect_enabled}, attempts={self.max_reconnect_attempts}, interval={self.reconnect_interval}")
     
     def is_device_supported(self, device):
         """

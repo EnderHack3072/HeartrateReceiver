@@ -1,4 +1,4 @@
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor
 from qfluentwidgets import InfoBar, InfoBarPosition
 from func.core import HeartRateMonitorCore, DeviceScanThread, HeartRateMonitorThread
@@ -7,9 +7,16 @@ class DeviceManager:
     """设备管理器，负责设备扫描和连接"""
     def __init__(self, window):
         self.window = window
-        self.core = HeartRateMonitorCore()
+        self.core = HeartRateMonitorCore(window.settings_manager)
         self.user_disconnecting = False  # 标记用户是否正在主动断开连接
         self.is_disconnecting = False  # 标记是否正在执行断开连接操作，防止重复调用
+        self.data_manager = window.data_manager
+        self.memory_share = window.memory_share
+        
+        # 重连定时器
+        self.reconnect_timer = QTimer()
+        self.reconnect_timer.setSingleShot(True)
+        self.reconnect_timer.timeout.connect(self._attempt_reconnect)
     
     # 扫描设备
     def start_scan(self):
@@ -88,7 +95,7 @@ class DeviceManager:
         InfoBar.error(
             title="扫描出错：",
             content=f"{error}",
-            orient=Qt.Horizontal,
+            orient=Qt.Orientation.Horizontal,
             isClosable=True,
             position=InfoBarPosition.TOP,
             duration=5000,
@@ -146,7 +153,8 @@ class DeviceManager:
 
     def on_monitor_error(self, error):
         # 如果是用户主动断开连接，不显示提示
-        if not self.user_disconnecting:
+        # 如果启用了自动重连，也不显示设备断开提示
+        if not self.user_disconnecting and not self.core.auto_reconnect_enabled:
             InfoBar.info(
                 title="设备已断开",
                 content="设备连接已断开，您可以重新扫描或连接其他设备",
@@ -156,14 +164,23 @@ class DeviceManager:
                 duration=4000,
                 parent=self.window
             )
-        self.disconnect_device()
+        
+        # 尝试自动重连（如果启用且不是用户主动断开）
+        if not self.user_disconnecting and self.core.auto_reconnect_enabled:
+            print(f"[AutoReconnect] 设备断开，尝试自动重连...")
+            self._schedule_reconnect()
+        else:
+            self.disconnect_device()
 
     # 更新心率数值
     def update_heart_rate(self, heart_rate):
         """处理心率数据"""
         # 这里可以添加心率数据的处理逻辑
         # 例如：存储心率数据、更新共享内存、进行异常检测等
-        print(f"[Heart Rate] 心率: {heart_rate}")
+        #print(f"[Heart Rate] 心率: {heart_rate}")
+        
+        self.data_manager.collect_data(heart_rate)
+        self.memory_share.update_heart_rate(heart_rate)
         
         # 将心率数据传递给右上卡片中的折线图
         if hasattr(self.window, 'homePage') and hasattr(self.window.homePage, 'lineChartPage') and hasattr(self.window.homePage.lineChartPage, 'chart'):
@@ -191,6 +208,11 @@ class DeviceManager:
         """处理状态信息"""
         # 这里可以添加状态信息的处理逻辑
         print(f"[Status] {status}")
+        
+        # 连接成功时重置重连尝试次数
+        if "设备连接成功" in status:
+            self.core.reconnect_attempts = 0
+            print(f"[AutoReconnect] 连接成功，重置重连次数")
         
         # 更新右上卡片中的状态信息
         if hasattr(self.window, 'homePage') and hasattr(self.window.homePage, 'lineChartPage'):
@@ -242,3 +264,61 @@ class DeviceManager:
         # 重置标志
         self.user_disconnecting = False
         self.is_disconnecting = False
+        
+        # 重置重连尝试次数
+        self.core.reconnect_attempts = 0
+        # 停止重连定时器
+        self.reconnect_timer.stop()
+    
+    def _schedule_reconnect(self):
+        """安排重连"""
+        if self.core.reconnect_attempts >= self.core.max_reconnect_attempts:
+            print(f"[AutoReconnect] 已达到最大重连次数 {self.core.max_reconnect_attempts}，放弃重连")
+            self.disconnect_device()
+            InfoBar.warning(
+                title="重连失败",
+                content=f"已尝试 {self.core.max_reconnect_attempts} 次重连均失败，请手动重连",
+                orient=Qt.Orientation.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=5000,
+                parent=self.window
+            )
+            return
+        
+        wait_time = self.core.reconnect_interval * 1000
+        self.core.reconnect_attempts += 1
+        print(f"[AutoReconnect] 第 {self.core.reconnect_attempts}/{self.core.max_reconnect_attempts} 次重连，等待 {self.core.reconnect_interval} 秒...")
+        
+        # 前3次重连不显示横幅
+        if self.core.reconnect_attempts > 3:
+            InfoBar.info(
+                title="正在重连",
+                content=f"第 {self.core.reconnect_attempts}/{self.core.max_reconnect_attempts} 次重连...",
+                orient=Qt.Orientation.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=3000,
+                parent=self.window
+            )
+        
+        self.reconnect_timer.start(wait_time)
+    
+    def _attempt_reconnect(self):
+        """执行重连"""
+        print(f"[AutoReconnect] 执行重连...")
+        
+        # 先清理之前的连接
+        if self.core.monitor_thread:
+            self.core.monitor_thread.stop()
+            self.core.monitor_thread.wait()
+            self.core.monitor_thread = None
+        
+        # 检查是否还有选中的设备
+        if not self.core.selected_device:
+            print("[AutoReconnect] 没有选中的设备，无法重连")
+            self.disconnect_device()
+            return
+        
+        # 重连设备
+        self.connect_device()

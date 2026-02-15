@@ -18,6 +18,10 @@ class SettingsManager:
             "floating_window_drag_type": "single_click",  # "single_click" 或 "double_click"
             "floating_window_always_on_top": True,  # 是否始终置顶
             "floating_window_pos": {"x": 100, "y": 100},  # 悬浮窗上次位置
+            # 自动重连设置
+            "auto_reconnect_enabled": True,  # 是否启用自动重连
+            "auto_reconnect_attempts": 5,  # 最大重连尝试次数
+            "auto_reconnect_interval": 5,  # 重连间隔（秒）
             # 大数字卡片设置
             "big_number_font_family": "Segoe UI",  # 大数字卡片字体家族
             "big_number_font_color": "#333"  # 大数字卡片字体颜色

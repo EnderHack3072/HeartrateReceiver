@@ -11,6 +11,9 @@ import sys
 from qframelesswindow.utils import getSystemAccentColor
 
 from func.device_manager import DeviceManager
+from func.data_manager import DataManager
+from func.memory_share import MemoryShareManager
+from func.settings_manager import SettingsManager
 
 def get_icon_from_base64(base64_data):
     """从base64编码数据创建QIcon"""
@@ -70,6 +73,15 @@ class HeartRateMonitorWindow(FluentWindow):
         
         self.init_tray_icon()
         
+        self.settings_manager = SettingsManager()
+        print("[SettingsManager] 设置管理器已初始化")
+        
+        self.data_manager = DataManager()
+        print("[DataManager] 数据管理器已初始化")
+        
+        self.memory_share = MemoryShareManager()
+        self.memory_share.initialize()
+        
         self.device_manager = DeviceManager(self)
         
         import sys
@@ -85,20 +97,25 @@ class HeartRateMonitorWindow(FluentWindow):
         setTheme(Theme.LIGHT)
         print("[Theme] 已应用默认主题: 浅色主题")
         
-        self.dontAskCloseConfirm = False
-        
         self.initWindow()
         
         self.homePage = HomePage(self)
-        
         self.addSubInterface(self.homePage, FluentIcon.HOME, "主页")
         
         self.widgetPage = WidgetPage(self)
-        
         self.addSubInterface(self.widgetPage, FluentIcon.ZOOM, "小组件")
 
-        self.settingsPage = SettingsPage(self)
+        from qfluentwidgets import NavigationToolButton
+        self.customButton = NavigationToolButton(FluentIcon.LINK, self)
+        self.customButton.setToolTip("官方网站")
+        self.customButton.clicked.connect(self.on_custom_button_clicked)
+        self.navigationInterface.addWidget(
+            routeKey='customButton',
+            widget=self.customButton,
+            position=NavigationItemPosition.BOTTOM
+        )
         
+        self.settingsPage = SettingsPage(self)
         self.addSubInterface(self.settingsPage, FluentIcon.SETTING, "设置", NavigationItemPosition.BOTTOM)
         
         from PyQt6.QtCore import QTimer
@@ -156,6 +173,11 @@ class HeartRateMonitorWindow(FluentWindow):
     
     def exit_application(self):
         """退出应用程序"""
+        print("[Cleanup] 开始清理资源")
+        self.data_manager.flush_data()
+        print("[DataManager] 数据已保存")
+        self.memory_share.close()
+        print("[MemoryShare] 共享内存已关闭")
         self.tray_icon.hide()
         QApplication.quit()
     
@@ -179,14 +201,30 @@ class HeartRateMonitorWindow(FluentWindow):
     def disconnect_device(self):
         self.device_manager.disconnect_device()
     
+    def on_custom_button_clicked(self):
+        """自定义按钮点击事件处理"""
+        InfoBar.info(
+            title="自定义按钮",
+            content="您点击了导航栏上的自定义按钮！",
+            orient=Qt.Orientation.Horizontal,
+            isClosable=True,
+            position=InfoBarPosition.TOP,
+            duration=3000,
+            parent=self
+        )
+        print("[CustomButton] 自定义按钮被点击")
+    
     def closeEvent(self, event):
         """重写关闭事件，实现关闭确认对话框"""
-        if not self.dontAskCloseConfirm:
+        show_confirmation = self.settings_manager.get("show_close_confirmation", True)
+        close_behavior = self.settings_manager.get("close_behavior", "ask")
+        
+        if show_confirmation:
             dialog = CloseConfirmationDialog(self)
             result = dialog.exec()
             
             if dialog.get_dont_ask_again():
-                self.dontAskCloseConfirm = True
+                self.settings_manager.set("show_close_confirmation", False)
             
             if result == 0:
                 event.ignore()
@@ -200,8 +238,14 @@ class HeartRateMonitorWindow(FluentWindow):
                 event.accept()
                 return
         else:
-            self.hide_main_window()
-            event.ignore()
+            if close_behavior == "close":
+                self.exit_application()
+                event.accept()
+                return
+            else:
+                self.hide_main_window()
+                event.ignore()
+                return
     
 def main():
     app = QApplication(sys.argv)
