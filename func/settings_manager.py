@@ -8,6 +8,7 @@ class SettingsManager:
         # 获取应用程序数据目录
         self.settings_dir = os.path.join(os.path.expanduser("~"), ".heartrate_monitor")
         self.settings_file = os.path.join(self.settings_dir, "settings.json")
+        self.device_names_file = os.path.join(self.settings_dir, "device_names.json")
         
         # 默认设置
         self.default_settings = {
@@ -33,6 +34,8 @@ class SettingsManager:
         
         # 加载设置
         self.settings = self.load_settings()
+        # 加载设备名称
+        self.device_names = self.load_device_names()
     
     def load_settings(self):
         """加载设置"""
@@ -69,3 +72,40 @@ class SettingsManager:
         """重置设置为默认值"""
         self.settings = self.default_settings.copy()
         self.save_settings()
+    
+    def load_device_names(self):
+        """加载设备名称"""
+        try:
+            if os.path.exists(self.device_names_file):
+                with open(self.device_names_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            else:
+                return {}
+        except Exception as e:
+            print(f"加载设备名称失败: {e}")
+            return {}
+    
+    def save_device_names(self):
+        """保存设备名称"""
+        try:
+            with open(self.device_names_file, "w", encoding="utf-8") as f:
+                json.dump(self.device_names, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            print(f"保存设备名称失败: {e}")
+    
+    def get_device_name(self, address, default=None):
+        """获取设备名称"""
+        return self.device_names.get(address, default)
+    
+    def set_device_name(self, address, name):
+        """设置设备名称"""
+        if self.device_names.get(address) != name:
+            self.device_names[address] = name
+            self.save_device_names()
+            print(f"[SettingsManager] 保存设备名称: {address} -> {name}")
+    
+    def remove_device_name(self, address):
+        """移除设备名称"""
+        if address in self.device_names:
+            del self.device_names[address]
+            self.save_device_names()

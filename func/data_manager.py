@@ -18,6 +18,7 @@ class DataManager:
         self.current_file_points = 0  # 当前文件中的数据点数量
         self.file_path = self._generate_file_path()
         self.lock = threading.Lock()  # 线程锁，确保数据安全
+        self.simulator_mode = False  # 模拟模式，不写入数据
         self._ensure_directory()
         self._create_csv_file()
     
@@ -64,6 +65,10 @@ class DataManager:
         """
         # 当心率值为0时不记录
         if heart_rate == 0:
+            return
+        
+        # 模拟模式下不写入数据到本地
+        if self.simulator_mode:
             return
             
         with self.lock:

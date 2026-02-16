@@ -52,10 +52,17 @@ class DynamicLineChart(QWidget):
         # 初始化数据
         self._init_data()
         
+        # 接收数据状态标志
+        self.is_receiving_data = False
+        
         # 设置定时器
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.draw_chart)
         self.timer.start(500)  # 500ms 刷新一次，约 2fps
+    
+    def set_receiving_state(self, is_receiving):
+        """设置接收数据状态"""
+        self.is_receiving_data = is_receiving
     
     def _init_data(self):
         """初始化数据结构"""
@@ -208,6 +215,10 @@ class DynamicLineChart(QWidget):
     
     def draw_chart(self):
         """绘制折线图（优化版本，确保流畅性）"""
+        # 仅在接收数据状态时执行刷新
+        if not self.is_receiving_data:
+            return
+        
         # 偏移量计算
         self.x_offset += 1
         if self.x_offset == self.GRID_SPACE // self.MOVE_STEP:

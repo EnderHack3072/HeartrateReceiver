@@ -1,7 +1,8 @@
 from PyQt6.QtWidgets import QFrame, QVBoxLayout
-from PyQt6.QtCore import Qt, QEvent
-from PyQt6.QtGui import QWheelEvent
-from qfluentwidgets import ExpandGroupSettingCard, FluentIcon, PushButton, ComboBox, SwitchButton, IndicatorPosition, PrimaryPushSettingCard, OptionsSettingCard, qconfig, SpinBox, ScrollArea
+from PyQt6.QtCore import Qt, QEvent, QTimer, QPoint
+from PyQt6.QtGui import QWheelEvent, QMouseEvent
+from qfluentwidgets import ExpandGroupSettingCard, FluentIcon, PushButton, ComboBox, SwitchButton, IndicatorPosition, PrimaryPushSettingCard, OptionsSettingCard, qconfig, SpinBox, ScrollArea, InfoBar, InfoBarPosition
+from func.core import check_debug_file
 
 class ExitSettingCard(ExpandGroupSettingCard):
     def __init__(self, settings_manager, parent=None):
@@ -197,6 +198,9 @@ class SettingsPage(QFrame):
         super().__init__(parent)
         self.setObjectName("settingsPage")
         self.parent_window = parent
+        self.click_count = 0
+        self.click_timer = QTimer()
+        self.click_timer.timeout.connect(self.reset_click_count)
         
         # 获取设置管理器
         if hasattr(parent, 'settings_manager'):
@@ -249,6 +253,8 @@ class SettingsPage(QFrame):
         
         # 添加空的PrimaryPushSettingCard
         self.softinfoCard = PrimaryPushSettingCard("检查更新", FluentIcon.INFO, "关于HeartRateReceiver", "2026 EnderHack", self.frame)
+        # 安装事件过滤器以捕获整个卡片的点击事件
+        self.softinfoCard.installEventFilter(self)
         self.frameLayout.addWidget(self.softinfoCard)
         
         # 添加弹性空间
@@ -262,3 +268,84 @@ class SettingsPage(QFrame):
         self.mainLayout.setSpacing(16)
         self.mainLayout.setContentsMargins(20, 20, 20, 20)
         self.mainLayout.addWidget(self.scrollArea)
+    
+    def eventFilter(self, obj, event):
+        """事件过滤器，捕获softinfoCard的点击事件"""
+        if obj == self.softinfoCard and event.type() == QEvent.Type.MouseButtonRelease:
+            self.on_softinfo_card_clicked()
+            return True
+        return super().eventFilter(obj, event)
+    
+    def on_softinfo_card_clicked(self):
+        """处理softinfoCard的点击事件"""
+        # 检查.debug文件是否存在
+        if not check_debug_file():
+            InfoBar.warning(
+                title="测试功能未启用",
+                content=".debug文件不存在",
+                orient=Qt.Orientation.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=2000,
+                parent=self
+            )
+            return
+        
+        # 增加点击计数
+        self.click_count += 1
+        self.click_timer.stop()
+        self.click_timer.start(3000)  # 3秒内必须完成7次点击
+        
+        print(f"[DebugClick] 点击次数: {self.click_count}/7")
+        
+        if self.click_count >= 7:
+            self.click_count = 0
+            self.click_timer.stop()
+            self.activate_simulator_mode()
+    
+    def reset_click_count(self):
+        """重置点击计数"""
+        self.click_count = 0
+        print("[DebugClick] 点击计数已重置")
+    
+    def activate_simulator_mode(self):
+        """激活模拟模式 - 直接切换到主页并添加模拟设备"""
+        if hasattr(self.parent_window, 'switchTo'):
+            self.parent_window.switchTo(self.parent_window.homePage)
+        
+        if hasattr(self.parent_window, 'device_manager'):
+            device_manager = self.parent_window.device_manager
+            device_manager.simulator_activated = True  # 标记为已激活
+            if not device_manager.simulator_mode:
+                # 检查设备列表中是否已经有模拟设备
+                list_widget = self.parent_window.homePage.listWidget
+                has_simulator = False
+                for i in range(list_widget.count()):
+                    if list_widget.item(i).text() == "模拟心率设备 (Debug)":
+                        has_simulator = True
+                        break
+                
+                if not has_simulator:
+                    device_manager._add_simulator_device()
+                
+                InfoBar.success(
+                    title="模拟设备已就绪",
+                    content="请在设备列表中选择「模拟心率设备 (Debug)」并点击连接",
+                    orient=Qt.Orientation.Horizontal,
+                    isClosable=True,
+                    position=InfoBarPosition.TOP,
+                    duration=4000,
+                    parent=self
+                )
+            else:
+                device_manager.stop_simulator()
+        else:
+            InfoBar.error(
+                title="功能不可用",
+                content="无法访问设备管理器",
+                orient=Qt.Orientation.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=3000,
+                parent=self
+            )

@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout
-from qfluentwidgets import SubtitleLabel, TitleLabel, BodyLabel, PushButton, PrimaryPushButton, setFont, CardWidget, CheckBox, IndeterminateProgressBar, ProgressBar, ListWidget
+from qfluentwidgets import SubtitleLabel, TitleLabel, BodyLabel, PushButton, PrimaryPushButton, setFont, CardWidget, CheckBox, IndeterminateProgressBar, ProgressBar, ListWidget, ToolTipFilter, ToolTipPosition
 from func.interfaces.heart_rate_interface.line_chart_page import LineChartPage
 from func.interfaces.heart_rate_interface.trend_chart_page import TrendChartPage
 
@@ -32,6 +32,8 @@ class HomePage(QFrame):
         
         # 添加复选框
         self.checkBox = CheckBox("自动筛选心率设备（这可能会大幅增加扫描时间）")
+        self.checkBox.setToolTip("开启后，仅显示支持心率监测的设备。\n适合不赶时间并对你的设备不太了解的人使用。\n此功能会延长一到两倍的扫描时间。\n默认关闭")
+        self.checkBox.installEventFilter(ToolTipFilter(self.checkBox, showDelay=300, position=ToolTipPosition.TOP))
         self.leftLayout.addWidget(self.checkBox)
         
         # 添加按钮，使用系统主题色
@@ -61,6 +63,13 @@ class HomePage(QFrame):
         self.listWidget.setSelectRightClickedRow(True)
         
         self.leftLayout.addWidget(self.listWidget)
+        
+        # 添加灰色小字
+        from qfluentwidgets import CaptionLabel
+        from PyQt6.QtGui import QColor
+        self.infoLabel = CaptionLabel("为提升您的使用体验，程序会在本地缓存设备名称。")
+        self.infoLabel.setStyleSheet("color: gray;")
+        self.leftLayout.addWidget(self.infoLabel)
         
         # 添加按钮布局
         self.buttonLayout = QHBoxLayout()

@@ -5,7 +5,7 @@ from io import BytesIO
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QWidget
 from PyQt6.QtGui import QIcon, QPixmap, QAction
-from qfluentwidgets import (InfoBar, InfoBarPosition, FluentWindow, NavigationItemPosition, FluentIcon, IconInfoBadge, InfoBadgePosition, Theme, setTheme, isDarkTheme, qconfig, setThemeColor, MessageBoxBase, SubtitleLabel, PushButton, CheckBox, PrimaryPushButton)
+from qfluentwidgets import (InfoBar, InfoBarPosition, FluentWindow, NavigationItemPosition, FluentIcon, IconInfoBadge, InfoBadgePosition, Theme, setTheme, isDarkTheme, qconfig, setThemeColor, MessageBoxBase, SubtitleLabel, PushButton, CheckBox, PrimaryPushButton, ToolTipFilter, ToolTipPosition)
 from func.icon import ICON_ICO
 import sys
 from qframelesswindow.utils import getSystemAccentColor
@@ -106,12 +106,13 @@ class HeartRateMonitorWindow(FluentWindow):
         self.addSubInterface(self.widgetPage, FluentIcon.ZOOM, "小组件")
 
         from qfluentwidgets import NavigationToolButton
-        self.customButton = NavigationToolButton(FluentIcon.LINK, self)
-        self.customButton.setToolTip("官方网站")
-        self.customButton.clicked.connect(self.on_custom_button_clicked)
+        self.websiteButton = NavigationToolButton(FluentIcon.GLOBE, self)
+        self.websiteButton.installEventFilter(ToolTipFilter(self.websiteButton, showDelay=300, position=ToolTipPosition.TOP))
+        self.websiteButton.setToolTip("官方网站")
+        self.websiteButton.clicked.connect(self.on_custom_button_clicked)
         self.navigationInterface.addWidget(
-            routeKey='customButton',
-            widget=self.customButton,
+            routeKey='websiteButton',
+            widget=self.websiteButton,
             position=NavigationItemPosition.BOTTOM
         )
         
@@ -119,7 +120,9 @@ class HeartRateMonitorWindow(FluentWindow):
         self.addSubInterface(self.settingsPage, FluentIcon.SETTING, "设置", NavigationItemPosition.BOTTOM)
         
         from PyQt6.QtCore import QTimer
+        from PyQt6.QtWidgets import QApplication
         QTimer.singleShot(600, self.device_manager.start_scan)
+    
     
     def initWindow(self):
         """初始化窗口"""
@@ -203,16 +206,8 @@ class HeartRateMonitorWindow(FluentWindow):
     
     def on_custom_button_clicked(self):
         """自定义按钮点击事件处理"""
-        InfoBar.info(
-            title="自定义按钮",
-            content="您点击了导航栏上的自定义按钮！",
-            orient=Qt.Orientation.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            duration=3000,
-            parent=self
-        )
-        print("[CustomButton] 自定义按钮被点击")
+        import webbrowser
+        webbrowser.open("https://www.nstechcod.top/")
     
     def closeEvent(self, event):
         """重写关闭事件，实现关闭确认对话框"""
@@ -227,7 +222,7 @@ class HeartRateMonitorWindow(FluentWindow):
                 self.settings_manager.set("show_close_confirmation", False)
             
             if result == 0:
-                event.ignore()
+                event.ignore() 
                 return
             elif result == 1:
                 self.hide_main_window()
