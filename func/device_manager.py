@@ -47,15 +47,15 @@ class DeviceManager:
         self.window.homePage.indeterminateBar.show()
         self.window.homePage.indeterminateBar.start()
         
-        InfoBar.info(
-            title="正在扫描设备...",
-            content="扫描周期为30秒，发现设备将实时显示",
-            orient=Qt.Orientation.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            duration=3000,
-            parent=self.window
-        )
+        # InfoBar.info(
+        #     title="正在扫描设备...",
+        #     content="扫描周期为30秒，发现设备将实时显示",
+        #     orient=Qt.Orientation.Horizontal,
+        #     isClosable=True,
+        #     position=InfoBarPosition.TOP,
+        #     duration=3000,
+        #     parent=self.window
+        # )
         
         # 创建并启动扫描线程
         self.core.scan_thread = DeviceScanThread()
@@ -188,15 +188,15 @@ class DeviceManager:
         self.core.devices = devices
         
         if self.discovered_devices:
-            InfoBar.success(
-                title="扫描完成",
-                content=f"发现 {len(self.discovered_devices)} 个设备",
-                orient=Qt.Orientation.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                duration=3000,
-                parent=self.window
-            )
+            # InfoBar.success(
+            #     title="扫描完成",
+            #     content=f"发现 {len(self.discovered_devices)} 个设备",
+            #     orient=Qt.Orientation.Horizontal,
+            #     isClosable=True,
+            #     position=InfoBarPosition.TOP,
+            #     duration=3000,
+            #     parent=self.window
+            # )
             self._finish_scan_ui(success=True)
         else:
             self.window.homePage.connectButton.setEnabled(False)
@@ -256,15 +256,15 @@ class DeviceManager:
             self.window.homePage.progressBar.setValue(100)
             self.window.homePage.progressBar.show()
             
-            InfoBar.info(
-                title="已停止扫描",
-                content="扫描进程已停止",
-                orient=Qt.Orientation.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                duration=2000,
-                parent=self.window
-            )
+            # InfoBar.info(
+            #     title="已停止扫描",
+            #     content="扫描进程已停止",
+            #     orient=Qt.Orientation.Horizontal,
+            #     isClosable=True,
+            #     position=InfoBarPosition.TOP,
+            #     duration=2000,
+            #     parent=self.window
+            # )
     
     def connect_device(self):
         """连接设备"""
@@ -349,15 +349,16 @@ class DeviceManager:
         """监测错误"""
         if not self.user_disconnecting:
             if not self.core.auto_reconnect_enabled:
-                InfoBar.info(
-                    title="设备已断开连接，正在重新扫描...",
-                    content="设备连接已断开，将自动重新扫描设备",
-                    orient=Qt.Orientation.Horizontal,
-                    isClosable=True,
-                    position=InfoBarPosition.TOP,
-                    duration=4000,
-                    parent=self.window
-                )
+                # InfoBar.info(
+                #     title="设备已断开连接，正在重新扫描...",
+                #     content="设备连接已断开，将自动重新扫描设备",
+                #     orient=Qt.Orientation.Horizontal,
+                #     isClosable=True,
+                #     position=InfoBarPosition.TOP,
+                #     duration=4000,
+                #     parent=self.window
+                # )
+                pass
         
         if not self.user_disconnecting and self.core.auto_reconnect_enabled:
             print(f"[AutoReconnect] 设备断开，尝试自动重连...")
@@ -391,16 +392,16 @@ class DeviceManager:
         
         if "设备连接成功" in status:
             self.core.reconnect_attempts = 0
-            print(f"[AutoReconnect] 连接成功，重置重连次数")
-            InfoBar.success(
-                title="设备连接成功",
-                content="设备已成功连接，开始心率监测",
-                orient=Qt.Orientation.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                duration=3000,
-                parent=self.window
-            )
+            # print(f"[AutoReconnect] 连接成功，重置重连次数")
+            # InfoBar.success(
+            #     title="设备连接成功",
+            #     content="设备已成功连接，开始心率监测",
+            #     orient=Qt.Orientation.Horizontal,
+            #     isClosable=True,
+            #     position=InfoBarPosition.TOP,
+            #     duration=3000,
+            #     parent=self.window
+            # )
             if hasattr(self.window, 'homePage') and hasattr(self.window.homePage, 'lineChartPage') and hasattr(self.window.homePage.lineChartPage, 'chart'):
                 self.window.homePage.lineChartPage.chart.set_receiving_state(True)
         

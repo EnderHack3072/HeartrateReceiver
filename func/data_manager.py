@@ -149,3 +149,41 @@ class DataManager:
         """
         self.flush_data()
         print(f"数据已保存到: {self.file_path}")
+    
+    def clean_up_files(self):
+        """
+        整理数据文件，删除 <=10KB 的文件，只保留 >=10KB 的文件
+        """
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+        if not os.path.exists(data_dir):
+            return {"deleted": 0, "kept": 0, "total": 0}
+        
+        deleted_count = 0
+        kept_count = 0
+        total_count = 0
+        
+        for filename in os.listdir(data_dir):
+            file_path = os.path.join(data_dir, filename)
+            
+            if os.path.isfile(file_path):
+                total_count += 1
+                file_size = os.path.getsize(file_path)
+                
+                if file_size <= 10 * 1024:
+                    try:
+                        os.remove(file_path)
+                        deleted_count += 1
+                        print(f"[FileCleanup] 已删除文件: {filename} ({file_size} bytes)")
+                    except Exception as e:
+                        print(f"[FileCleanup] 删除文件失败 {filename}: {e}")
+                else:
+                    kept_count += 1
+                    print(f"[FileCleanup] 保留文件: {filename} ({file_size} bytes)")
+        
+        result = {
+            "deleted": deleted_count,
+            "kept": kept_count,
+            "total": total_count
+        }
+        print(f"[FileCleanup] 整理完成 - 总共: {total_count}, 删除: {deleted_count}, 保留: {kept_count}")
+        return result

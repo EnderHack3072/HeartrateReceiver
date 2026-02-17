@@ -192,6 +192,59 @@ class AutoReconnect(ExpandGroupSettingCard):
     def wheelEvent(self, event: QWheelEvent):
         event.ignore()
 
+class LocalDataSettingCard(ExpandGroupSettingCard):
+    def __init__(self, parent_window, parent=None):
+        super().__init__(FluentIcon.FOLDER, "本地数据", "管理本地数据文件", parent)
+        self.parent_window = parent_window
+        
+        self.cleanupButton = PushButton("立即整理", self)
+        self.cleanupButton.clicked.connect(self.on_cleanup_clicked)
+        
+        self.viewLayout.setContentsMargins(0, 0, 0, 0)
+        self.viewLayout.setSpacing(0)
+        
+        self.addGroup(FluentIcon.CLEAR_SELECTION, "数据文件整理", "删除小于等于10KB的数据文件，保留大于等于10KB的文件", self.cleanupButton)
+    
+    def on_cleanup_clicked(self):
+        """处理文件整理按钮点击事件"""
+        if hasattr(self.parent_window, 'parent_window') and hasattr(self.parent_window.parent_window, 'data_manager'):
+            data_manager = self.parent_window.parent_window.data_manager
+            result = data_manager.clean_up_files()
+            
+            if result["total"] == 0:
+                InfoBar.info(
+                    title="整理完成",
+                    content="没有找到数据文件",
+                    orient=Qt.Orientation.Horizontal,
+                    isClosable=True,
+                    position=InfoBarPosition.TOP,
+                    duration=3000,
+                    parent=self.parent_window
+                )
+            else:
+                InfoBar.success(
+                    title="整理完成",
+                    content=f"总共 {result['total']} 个文件，删除 {result['deleted']} 个，保留 {result['kept']} 个",
+                    orient=Qt.Orientation.Horizontal,
+                    isClosable=True,
+                    position=InfoBarPosition.TOP,
+                    duration=4000,
+                    parent=self.parent_window
+                )
+        else:
+            InfoBar.error(
+                title="功能不可用",
+                content="无法访问数据管理器",
+                orient=Qt.Orientation.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=3000,
+                parent=self.parent_window
+            )
+    
+    def wheelEvent(self, event: QWheelEvent):
+        event.ignore()
+
 class SettingsPage(QFrame):
     """设置页面"""
     def __init__(self, parent=None):
@@ -251,6 +304,10 @@ class SettingsPage(QFrame):
         card.wheelEvent = self.wheelEvent
         self.frameLayout.addWidget(card)
         
+        # 添加本地数据手风琴设置卡
+        self.localDataCard = LocalDataSettingCard(self, self.frame)
+        self.frameLayout.addWidget(self.localDataCard)
+        
         # 添加空的PrimaryPushSettingCard
         self.softinfoCard = PrimaryPushSettingCard("检查更新", FluentIcon.INFO, "关于HeartRateReceiver", "2026 EnderHack", self.frame)
         # 安装事件过滤器以捕获整个卡片的点击事件
@@ -280,15 +337,15 @@ class SettingsPage(QFrame):
         """处理softinfoCard的点击事件"""
         # 检查.debug文件是否存在
         if not check_debug_file():
-            InfoBar.warning(
-                title="测试功能未启用",
-                content=".debug文件不存在",
-                orient=Qt.Orientation.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                duration=2000,
-                parent=self
-            )
+            #InfoBar.warning(
+            #    title="测试功能未启用",
+            #    content=".debug文件不存在",
+            #    orient=Qt.Orientation.Horizontal,
+            #    isClosable=True,
+            #    position=InfoBarPosition.TOP,
+            #    duration=2000,
+            #    parent=self
+            #)
             return
         
         # 增加点击计数
@@ -307,6 +364,8 @@ class SettingsPage(QFrame):
         """重置点击计数"""
         self.click_count = 0
         print("[DebugClick] 点击计数已重置")
+    
+
     
     def activate_simulator_mode(self):
         """激活模拟模式 - 直接切换到主页并添加模拟设备"""

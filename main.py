@@ -9,7 +9,6 @@ from qfluentwidgets import (InfoBar, InfoBarPosition, FluentWindow, NavigationIt
 from func.icon import ICON_ICO
 import sys
 from qframelesswindow.utils import getSystemAccentColor
-
 from func.device_manager import DeviceManager
 from func.data_manager import DataManager
 from func.memory_share import MemoryShareManager
