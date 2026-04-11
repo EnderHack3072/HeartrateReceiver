@@ -17,8 +17,7 @@ class DataManager:
         self.data_buffer = []
         self.current_file_points = 0  # 当前文件中的数据点数量
         self.file_path = self._generate_file_path()
-        self.lock = threading.Lock()  # 线程锁，确保数据安全
-        self.simulator_mode = False  # 模拟模式，不写入数据
+        self.lock = threading.Lock()
         self._ensure_directory()
         self._create_csv_file()
     
@@ -67,10 +66,6 @@ class DataManager:
         if heart_rate == 0:
             return
         
-        # 模拟模式下不写入数据到本地
-        if self.simulator_mode:
-            return
-            
         with self.lock:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
             self.data_buffer.append([timestamp, heart_rate])

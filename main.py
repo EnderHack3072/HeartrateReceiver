@@ -62,6 +62,8 @@ class CloseConfirmationDialog(MessageBoxBase):
 from func.interfaces.mainpage import HomePage
 from func.interfaces.settingspage import SettingsPage
 from func.interfaces.widgetpage import WidgetPage
+from func.interfaces.datapage import DataPage
+from func.interfaces.storagepage import StoragePage
 
 class HeartRateMonitorWindow(FluentWindow):
     def __init__(self):
@@ -103,6 +105,12 @@ class HeartRateMonitorWindow(FluentWindow):
         
         self.widgetPage = WidgetPage(self)
         self.addSubInterface(self.widgetPage, FluentIcon.ZOOM, "小组件")
+        
+        self.dataPage = DataPage(self)
+        self.addSubInterface(self.dataPage, FluentIcon.MARKET, "数据")
+        
+        self.storagePage = StoragePage(self)
+        self.addSubInterface(self.storagePage, FluentIcon.FOLDER, "存储")
 
         from qfluentwidgets import NavigationToolButton
         self.websiteButton = NavigationToolButton(FluentIcon.GLOBE, self)
@@ -209,9 +217,8 @@ class HeartRateMonitorWindow(FluentWindow):
         webbrowser.open("https://www.nstechcod.top/")
     
     def closeEvent(self, event):
-        """重写关闭事件，实现关闭确认对话框"""
         show_confirmation = self.settings_manager.get("show_close_confirmation", True)
-        close_behavior = self.settings_manager.get("close_behavior", "ask")
+        close_behavior = self.settings_manager.get("close_behavior", "minimize")
         
         if show_confirmation:
             dialog = CloseConfirmationDialog(self)
@@ -219,6 +226,10 @@ class HeartRateMonitorWindow(FluentWindow):
             
             if dialog.get_dont_ask_again():
                 self.settings_manager.set("show_close_confirmation", False)
+                if result == 1:
+                    self.settings_manager.set("close_behavior", "minimize")
+                elif result == 2:
+                    self.settings_manager.set("close_behavior", "close")
             
             if result == 0:
                 event.ignore() 
@@ -246,8 +257,6 @@ def main():
     window = HeartRateMonitorWindow()
     window.show()
     
-    startup.close_system_splash(startup.syshwnd)
-
     sys.exit(app.exec())
 
 if __name__ == "__main__":
