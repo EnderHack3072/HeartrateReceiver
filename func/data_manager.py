@@ -48,7 +48,6 @@ class DataManager:
         try:
             with open(self.file_path, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                #writer.writerow(['timestamp', 'heart_rate'])
                 # 强制写入磁盘
                 f.flush()
                 os.fsync(f.fileno())

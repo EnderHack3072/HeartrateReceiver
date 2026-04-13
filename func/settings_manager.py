@@ -25,7 +25,9 @@ class SettingsManager:
             "auto_reconnect_interval": 5,  # 重连间隔（秒）
             # 大数字卡片设置
             "big_number_font_family": "Segoe UI",  # 大数字卡片字体家族
-            "big_number_font_color": "#333"  # 大数字卡片字体颜色
+            "big_number_font_color": "#333",  # 大数字卡片字体颜色
+            # 存储设置
+            "auto_clean_on_startup": True  # 每次启动时检查并清理
         }
         
         # 确保设置目录存在
@@ -104,8 +106,3 @@ class SettingsManager:
             self.save_device_names()
             print(f"[SettingsManager] 保存设备名称: {address} -> {name}")
     
-    def remove_device_name(self, address):
-        """移除设备名称"""
-        if address in self.device_names:
-            del self.device_names[address]
-            self.save_device_names()

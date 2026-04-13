@@ -163,6 +163,31 @@ class AutoReconnect(ExpandGroupSettingCard):
     def wheelEvent(self, event: QWheelEvent):
         event.ignore()
 
+class StorageSettingCard(ExpandGroupSettingCard):
+    def __init__(self, settings_manager, parent=None):
+        super().__init__(FluentIcon.FOLDER, "存储设置", "设置存储相关的选项", parent)
+        self.settings_manager = settings_manager
+
+        self.autoCleanSwitchButton = SwitchButton("否", self, IndicatorPosition.RIGHT)
+        self.autoCleanSwitchButton.setOnText("是")
+        
+        auto_clean = self.settings_manager.get("auto_clean_on_startup", True)
+        self.autoCleanSwitchButton.setChecked(auto_clean)
+        
+        self.autoCleanSwitchButton.checkedChanged.connect(self.on_auto_clean_changed)
+
+        self.viewLayout.setContentsMargins(0, 0, 0, 0)
+        self.viewLayout.setSpacing(0)
+
+        self.addGroup(FluentIcon.TRANSPARENT, "每次启动时检查并清理", "启动时自动清理小于5KB的文件（最新文件除外）", self.autoCleanSwitchButton)
+    
+    def on_auto_clean_changed(self, checked):
+        self.settings_manager.set("auto_clean_on_startup", checked)
+        print(f"[Settings] 每次启动时检查并清理: {'启用' if checked else '禁用'}")
+    
+    def wheelEvent(self, event):
+        event.ignore()
+
 class SettingsPage(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -198,6 +223,9 @@ class SettingsPage(QFrame):
             device_manager = parent.device_manager
         self.autoReconnectCard = AutoReconnect(self.settings_manager, device_manager, self.frame)
         self.frameLayout.addWidget(self.autoReconnectCard)
+        
+        self.storageSettingCard = StorageSettingCard(self.settings_manager, self.frame)
+        self.frameLayout.addWidget(self.storageSettingCard)
         
         card = OptionsSettingCard(
              qconfig.themeMode, 

@@ -66,10 +66,19 @@ class DeviceManager:
         device_name = self._get_stable_device_name(address, device_info.name)
         display_text = self._get_device_display_text(address, device_name)
         
-        self.window.homePage.listWidget.addItem(display_text)
-        self.window.homePage.connectButton.setEnabled(True)
+        # 使用QTimer确保在主线程中执行UI操作
+        QTimer.singleShot(0, lambda: self._add_device_to_list(display_text))
         
         print(f"[DeviceManager] 添加设备到列表: {display_text}")
+    
+    def _add_device_to_list(self, display_text):
+        """在主线程中添加设备到列表并排序"""
+        try:
+            self.window.homePage.listWidget.addItem(display_text)
+            self._sort_device_list()
+            self.window.homePage.connectButton.setEnabled(True)
+        except Exception as e:
+            print(f"[DeviceManager] 添加设备到列表时出错: {e}")
     
     def _on_device_updated(self, device_info):
         address = device_info.address
@@ -82,13 +91,68 @@ class DeviceManager:
         new_device_name = self._get_stable_device_name(address, device_info.name)
         current_display_text = self._get_device_display_text(address, new_device_name)
         
-        for i in range(self.window.homePage.listWidget.count()):
-            item_text = self.window.homePage.listWidget.item(i).text()
-            if address in item_text or item_text == current_display_text:
-                if item_text != current_display_text:
-                    self.window.homePage.listWidget.item(i).setText(current_display_text)
-                    print(f"[DeviceManager] 更新设备显示: {address} -> {current_display_text}")
-                break
+        # 使用QTimer确保在主线程中执行UI操作
+        QTimer.singleShot(0, lambda: self._update_device_display(address, current_display_text))
+    
+    def _update_device_display(self, address, current_display_text):
+        """在主线程中更新设备显示并排序"""
+        try:
+            for i in range(self.window.homePage.listWidget.count()):
+                item_text = self.window.homePage.listWidget.item(i).text()
+                if address in item_text or item_text == current_display_text:
+                    if item_text != current_display_text:
+                        self.window.homePage.listWidget.item(i).setText(current_display_text)
+                        print(f"[DeviceManager] 更新设备显示: {address} -> {current_display_text}")
+                        self._sort_device_list()
+                    break
+        except Exception as e:
+            print(f"[DeviceManager] 更新设备显示时出错: {e}")
+    
+    def _sort_device_list(self):
+        """对设备列表进行排序：有设备名的在前，只有MAC地址的在后"""
+        # 直接在主线程中执行排序操作
+        try:
+            # 检查listWidget是否存在
+            if not hasattr(self.window, 'homePage') or not hasattr(self.window.homePage, 'listWidget'):
+                return
+            
+            # 获取所有设备项
+            items = []
+            count = self.window.homePage.listWidget.count()
+            
+            for i in range(count):
+                item = self.window.homePage.listWidget.item(i)
+                if item:
+                    try:
+                        text = item.text()
+                        items.append((text, item))
+                    except Exception:
+                        pass
+            
+            # 排序规则：有设备名的在前，只有MAC地址的在后
+            def sort_key(item_tuple):
+                try:
+                    text, item = item_tuple
+                    # 检查是否是MAC地址（通常是由冒号分隔的12个十六进制字符）
+                    is_mac_only = ':' in text and len(text) == 17
+                    return (is_mac_only, text)
+                except Exception:
+                    return (True, "")
+            
+            # 排序
+            sorted_items = sorted(items, key=sort_key)
+            
+            # 清空列表
+            self.window.homePage.listWidget.clear()
+            
+            # 重新添加到列表
+            for text, item in sorted_items:
+                try:
+                    self.window.homePage.listWidget.addItem(text)
+                except Exception:
+                    pass
+        except Exception:
+            pass
     
     def _get_stable_device_name(self, address, current_name):
         valid_name = current_name if current_name and current_name.strip() and current_name != "未知设备" else None

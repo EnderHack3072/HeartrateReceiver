@@ -5,7 +5,7 @@ from io import BytesIO
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QWidget
 from PyQt6.QtGui import QIcon, QPixmap, QAction
-from qfluentwidgets import (InfoBar, InfoBarPosition, FluentWindow, NavigationItemPosition, FluentIcon, IconInfoBadge, InfoBadgePosition, Theme, setTheme, isDarkTheme, qconfig, setThemeColor, MessageBoxBase, SubtitleLabel, PushButton, CheckBox, PrimaryPushButton, ToolTipFilter, ToolTipPosition)
+from qfluentwidgets import (InfoBar, InfoBarPosition, FluentWindow, NavigationItemPosition, FluentIcon, IconInfoBadge, InfoBadgePosition, Theme, setTheme, isDarkTheme, qconfig, setThemeColor, MessageBoxBase, SubtitleLabel, PushButton, CheckBox, PrimaryPushButton, ToolTipFilter, ToolTipPosition, SystemThemeListener)
 from func.icon import ICON_ICO
 import sys
 from qframelesswindow.utils import getSystemAccentColor
@@ -85,7 +85,6 @@ class HeartRateMonitorWindow(FluentWindow):
         
         self.device_manager = DeviceManager(self)
         
-        import sys
         if sys.platform in ["win32", "darwin"]:
             try:
                 system_color = getSystemAccentColor()
@@ -97,6 +96,12 @@ class HeartRateMonitorWindow(FluentWindow):
         
         setTheme(Theme.LIGHT)
         print("[Theme] 已应用默认主题: 浅色主题")
+        
+        # 创建主题监听器
+        self.themeListener = SystemThemeListener(self)
+        # 启动监听器
+        self.themeListener.start()
+        print("[Theme] 系统主题监听器已启动")
         
         self.initWindow()
         
@@ -126,9 +131,47 @@ class HeartRateMonitorWindow(FluentWindow):
         self.settingsPage = SettingsPage(self)
         self.addSubInterface(self.settingsPage, FluentIcon.SETTING, "设置", NavigationItemPosition.BOTTOM)
         
-        from PyQt6.QtCore import QTimer
-        from PyQt6.QtWidgets import QApplication
-        QTimer.singleShot(600, self.device_manager.start_scan)
+        # 启动时自动检查并清理小文件（如果启用）
+        if self.settings_manager.get("auto_clean_on_startup", True):
+            print("[AutoClean] 启动时自动清理小文件")
+            # 导入清理函数并执行
+            import os
+            import shutil
+            data_dir = os.path.join('data')
+            try:
+                if os.path.exists(data_dir) and os.path.isdir(data_dir):
+                    files = os.listdir(data_dir)
+                    cleaned_count = 0
+                    
+                    # 找出最新的文件（基于文件名排序）
+                    latest_file = None
+                    if files:
+                        sorted_files = sorted(files, reverse=True)
+                        latest_file = sorted_files[0]
+                    
+                    # 清理小于5KB的文件，跳过最新的文件
+                    for file in files:
+                        if file == latest_file:
+                            continue
+                            
+                        file_path = os.path.join(data_dir, file)
+                        if os.path.isfile(file_path):
+                            try:
+                                file_size = os.path.getsize(file_path)
+                                if file_size < 5 * 1024:  # 小于5KB
+                                    os.remove(file_path)
+                                    cleaned_count += 1
+                            except Exception:
+                                pass
+                    
+                    if cleaned_count > 0:
+                        print(f"[AutoClean] 清理了 {cleaned_count} 个小文件")
+                    else:
+                        print("[AutoClean] 没有需要清理的小文件")
+            except Exception as e:
+                print(f"[AutoClean] 自动清理失败: {e}")
+        
+
     
     
     def initWindow(self):
@@ -146,7 +189,7 @@ class HeartRateMonitorWindow(FluentWindow):
         self.titleBar.maxBtn.hide()
         self.titleBar.setDoubleClickEnabled(False)
         
-        self.setMicaEffectEnabled(True)
+        self.setMicaEffectEnabled(False)
         
     
     def init_tray_icon(self):
@@ -200,6 +243,7 @@ class HeartRateMonitorWindow(FluentWindow):
         """主题变化完成后的处理"""
         super()._onThemeChangedFinish()
         
+        # 云母特效启用时需要增加重试机制
         if self.isMicaEffectEnabled():
             QTimer.singleShot(100, lambda: self.windowEffect.setMicaEffect(self.winId(), isDarkTheme()))
         
@@ -217,6 +261,11 @@ class HeartRateMonitorWindow(FluentWindow):
         webbrowser.open("https://www.nstechcod.top/")
     
     def closeEvent(self, event):
+        # 停止主题监听器线程
+        self.themeListener.terminate()
+        self.themeListener.deleteLater()
+        print("[Theme] 系统主题监听器已停止")
+        
         show_confirmation = self.settings_manager.get("show_close_confirmation", True)
         close_behavior = self.settings_manager.get("close_behavior", "minimize")
         

@@ -332,7 +332,6 @@ class DynamicLineChart(QWidget):
         self.grid_xp_arr = []
         
         # 计算竖线数量，确保覆盖整个宽度
-        import math
         grid_count = math.ceil(width / self.GRID_SPACE) + 1
         
         # 画竖线（根据偏移量实现动态效果）
@@ -351,8 +350,7 @@ class DynamicLineChart(QWidget):
         if len(self.point_lst) < 2:
             return
         
-        # 先绘制填充区域（半透明红色）
-        from PyQt6.QtGui import QBrush, QPainterPath
+
         
         # 创建填充路径
         fill_path = QPainterPath()
