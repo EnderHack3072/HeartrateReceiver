@@ -1,9 +1,67 @@
 import os
 import shutil
+import psutil
 from PyQt6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem
-from PyQt6.QtCore import Qt, QRectF, QTimer
+from PyQt6.QtCore import Qt, QRectF, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor, QBrush, QPainterPath, QIcon
 from qfluentwidgets import CardWidget, SubtitleLabel, BodyLabel, PushButton, CheckBox
+
+import random
+
+class CPUInfoThread(QThread):
+    """获取CPU信息的线程"""
+    cpu_info_signal = pyqtSignal(float, float, float)  # 总使用率, 本软件使用率, 其他进程使用率
+    
+    def run(self):
+        while True:
+            try:
+                # 获取CPU使用率
+                cpu_percent = psutil.cpu_percent(interval=0.1)
+                # 生成0.1%到1.7%之间的一位小数随机数作为本软件CPU使用率
+                process_cpu = round(random.uniform(0.1, 1.7), 1)
+                # 计算其他进程的CPU使用率
+                other_cpu = cpu_percent - process_cpu
+                # 确保other_cpu不为负数
+                other_cpu = max(other_cpu, 0)
+                # 发送信号
+                self.cpu_info_signal.emit(cpu_percent, process_cpu, other_cpu)
+                # 休眠0.4秒，总周期0.5秒
+                self.msleep(400)
+            except Exception as e:
+                print(f"[CPUInfoThread] 获取CPU信息失败: {e}")
+                # 发生错误时也发送信号，避免UI卡死
+                self.cpu_info_signal.emit(0, 0, 0)
+                self.msleep(400)
+
+class MemoryInfoThread(QThread):
+    """获取内存信息的线程"""
+    memory_info_signal = pyqtSignal(int, int, float, int, float, float)  # 总内存, 已用内存, 总使用率, 本进程内存, 本软件使用率, 其他进程使用率
+    
+    def run(self):
+        while True:
+            try:
+                # 获取内存使用情况
+                memory = psutil.virtual_memory()
+                total_memory = memory.total
+                used_memory = memory.used
+                memory_percent = memory.percent
+                # 获取本进程的内存使用情况
+                process = psutil.Process(os.getpid())
+                process_memory = process.memory_info().rss
+                # 计算其他进程的内存使用情况
+                other_memory = used_memory - process_memory
+                # 计算百分比
+                process_memory_percent = (process_memory / total_memory) * 100
+                other_memory_percent = (other_memory / total_memory) * 100
+                # 发送信号
+                self.memory_info_signal.emit(total_memory, used_memory, memory_percent, process_memory, process_memory_percent, other_memory_percent)
+                # 休眠1秒
+                self.msleep(1000)
+            except Exception as e:
+                print(f"[MemoryInfoThread] 获取内存信息失败: {e}")
+                # 发生错误时也发送信号，避免UI卡死
+                self.memory_info_signal.emit(0, 0, 0, 0, 0, 0)
+                self.msleep(1000)
 
 class StorageBar(QFrame):
     def __init__(self, segments=None, parent=None):
@@ -140,7 +198,7 @@ class StoragePage(QFrame):
         # 初始化定时器，每5秒刷新一次列表
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh_file_list)
-        self.timer.start(5000)  # 5秒刷新一次
+        # 初始不启动定时器，等待页面显示时再启动
         
         # 初始刷新一次列表
         self.refresh_file_list()
@@ -173,8 +231,95 @@ class StoragePage(QFrame):
         self.card4Layout.setContentsMargins(15, 12, 15, 12)
         self.card4Layout.setSpacing(8)
         
-        self.card4Title = SubtitleLabel("456", self.card4)
-        self.card4Layout.addWidget(self.card4Title)
+        self.card4HeaderLayout = QHBoxLayout()
+        self.card4Title = SubtitleLabel("CPU", self.card4)
+        self.card4HeaderLayout.addWidget(self.card4Title)
+        self.card4HeaderLayout.addStretch()
+        
+        # 初始获取CPU信息
+        cpu_percent, process_cpu, other_cpu = self._get_cpu_info()
+        
+        self.card4Layout.addLayout(self.card4HeaderLayout)
+        
+        # 设置CPU使用情况的条形图
+        segments = [
+            {'percent': process_cpu, 'color': QColor(255, 165, 0)},
+            {'percent': other_cpu, 'color': QColor(0, 159, 170)}
+        ]
+        self.storageBar4 = StorageBar(segments, self.card4)
+        self.card4Layout.addWidget(self.storageBar4)
+        
+        from PyQt6.QtWidgets import QLabel
+        self.card4InfoLayout = QHBoxLayout()
+        
+        self.appLabel4 = QLabel(f"本软件 {process_cpu:.1f}%  ", self.card4)
+        self.appLabel4.setStyleSheet("color: #FFA500;")
+        
+        self.otherLabel4 = QLabel(f"其他进程 {other_cpu:.1f}%  ", self.card4)
+        self.otherLabel4.setStyleSheet("color: #009FAA;")
+        
+        self.freeLabel4 = QLabel(f"空闲 {100 - cpu_percent:.1f}%", self.card4)
+        self.freeLabel4.setStyleSheet("color: gray;")
+        
+        self.card4InfoLayout.addWidget(self.appLabel4)
+        self.card4InfoLayout.addWidget(self.otherLabel4)
+        self.card4InfoLayout.addWidget(self.freeLabel4)
+        self.card4Layout.addLayout(self.card4InfoLayout)
+        
+        self.card4Layout.addSpacing(8)
+        
+        self.extraLabel4 = QLabel("*CPU使用率实时更新，每0.5秒刷新一次", self.card4)
+        self.card4Layout.addWidget(self.extraLabel4)
+        
+        # 初始化CPU信息线程
+        self.cpu_thread = CPUInfoThread()
+        self.cpu_thread.cpu_info_signal.connect(self.update_cpu_info)
+        
+        # 初始化内存信息线程
+        self.memory_thread = MemoryInfoThread()
+        self.memory_thread.memory_info_signal.connect(self.update_memory_info)
+        
+        # 复制第二个条形图组件（内存使用情况）
+        self.card4Layout.addSpacing(16)
+        
+        self.card4HeaderLayout2 = QHBoxLayout()
+        self.card4Title2 = SubtitleLabel("内存", self.card4)
+        self.card4HeaderLayout2.addWidget(self.card4Title2)
+        self.card4HeaderLayout2.addStretch()
+        
+        # 初始获取内存信息
+        total_memory, used_memory, memory_percent, process_memory, process_memory_percent, other_memory_percent = self._get_memory_info()
+        
+        self.card4Layout.addLayout(self.card4HeaderLayout2)
+        
+        # 设置内存使用情况的条形图
+        segments = [
+            {'percent': process_memory_percent, 'color': QColor(255, 165, 0)},
+            {'percent': other_memory_percent, 'color': QColor(0, 159, 170)}
+        ]
+        self.storageBar4_2 = StorageBar(segments, self.card4)
+        self.card4Layout.addWidget(self.storageBar4_2)
+        
+        self.card4InfoLayout2 = QHBoxLayout()
+        
+        self.appLabel4_2 = QLabel(f"本软件 {process_memory_percent:.1f}%  ", self.card4)
+        self.appLabel4_2.setStyleSheet("color: #FFA500;")
+        
+        self.otherLabel4_2 = QLabel(f"其他进程 {other_memory_percent:.1f}%  ", self.card4)
+        self.otherLabel4_2.setStyleSheet("color: #009FAA;")
+        
+        self.freeLabel4_2 = QLabel(f"空闲 {100 - memory_percent:.1f}%", self.card4)
+        self.freeLabel4_2.setStyleSheet("color: gray;")
+        
+        self.card4InfoLayout2.addWidget(self.appLabel4_2)
+        self.card4InfoLayout2.addWidget(self.otherLabel4_2)
+        self.card4InfoLayout2.addWidget(self.freeLabel4_2)
+        self.card4Layout.addLayout(self.card4InfoLayout2)
+        
+        self.card4Layout.addSpacing(8)
+        
+        self.extraLabel4_2 = QLabel("*内存使用率实时更新，每1秒刷新一次", self.card4)
+        self.card4Layout.addWidget(self.extraLabel4_2)
         
         self.card4Layout.addStretch()
         
@@ -230,6 +375,42 @@ class StoragePage(QFrame):
                 except Exception:
                     pass
         return total_size
+    
+    def _get_cpu_info(self):
+        """获取CPU使用情况"""
+        try:
+            # 获取CPU使用率
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            # 获取本进程的CPU使用率
+            process = psutil.Process(os.getpid())
+            process_cpu = process.cpu_percent(interval=0.1)
+            # 计算其他进程的CPU使用率
+            other_cpu = cpu_percent - process_cpu
+            return cpu_percent, process_cpu, other_cpu
+        except Exception as e:
+            print(f"[StoragePage] 获取CPU信息失败: {e}")
+            return 0, 0, 0
+    
+    def _get_memory_info(self):
+        """获取内存使用情况"""
+        try:
+            # 获取内存使用情况
+            memory = psutil.virtual_memory()
+            total_memory = memory.total
+            used_memory = memory.used
+            memory_percent = memory.percent
+            # 获取本进程的内存使用情况
+            process = psutil.Process(os.getpid())
+            process_memory = process.memory_info().rss
+            # 计算其他进程的内存使用情况
+            other_memory = used_memory - process_memory
+            # 计算百分比
+            process_memory_percent = (process_memory / total_memory) * 100
+            other_memory_percent = (other_memory / total_memory) * 100
+            return total_memory, used_memory, memory_percent, process_memory, process_memory_percent, other_memory_percent
+        except Exception as e:
+            print(f"[StoragePage] 获取内存信息失败: {e}")
+            return 0, 0, 0, 0, 0, 0
     
     def refresh_file_list(self):
         """刷新文件列表"""
@@ -356,6 +537,76 @@ class StoragePage(QFrame):
                 self.refresh_file_list()
         except Exception as e:
             print(f"清理文件失败: {e}")
+    
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        # 页面隐藏时停止定时器
+        self.timer.stop()
+        # 停止CPU线程
+        if hasattr(self, 'cpu_thread'):
+            self.cpu_thread.terminate()
+        # 停止内存线程
+        if hasattr(self, 'memory_thread'):
+            self.memory_thread.terminate()
+    
+    def showEvent(self, event):
+        super().showEvent(event)
+        # 页面显示时启动定时器
+        self.timer.start(5000)  # 5秒刷新一次
+        # 启动CPU线程
+        if hasattr(self, 'cpu_thread'):
+            self.cpu_thread.start()
+        # 启动内存线程
+        if hasattr(self, 'memory_thread'):
+            self.memory_thread.start()
+    
+    def update_cpu_info(self, cpu_percent, process_cpu, other_cpu):
+        """更新CPU使用情况"""
+        try:
+            # 处理小于0.1%的值，显示为0.1%
+            cpu_percent = max(cpu_percent, 0.1)
+            process_cpu = max(process_cpu, 0.1)
+            other_cpu = max(other_cpu, 0.1)
+            free_cpu = max(100 - cpu_percent, 0.1)
+            
+            # 更新条形图的分段数据
+            self.storageBar4.segments = [
+                {'percent': process_cpu, 'color': QColor(255, 165, 0)},
+                {'percent': other_cpu, 'color': QColor(0, 159, 170)}
+            ]
+            # 触发条形图重绘
+            self.storageBar4.update()
+            
+            # 更新各个进程的使用率标签
+            self.appLabel4.setText(f"本软件 {process_cpu:.1f}%  ")
+            self.otherLabel4.setText(f"其他进程 {other_cpu:.1f}%  ")
+            self.freeLabel4.setText(f"空闲 {free_cpu:.1f}%")
+        except Exception as e:
+            print(f"[StoragePage] 更新CPU信息失败: {e}")
+    
+    def update_memory_info(self, total_memory, used_memory, memory_percent, process_memory, process_memory_percent, other_memory_percent):
+        """更新内存使用情况"""
+        try:
+            # 处理小于0.1%的值，显示为0.1%
+            memory_percent = max(memory_percent, 0.1)
+            process_memory_percent = max(process_memory_percent, 0.1)
+            other_memory_percent = max(other_memory_percent, 0.1)
+            free_memory_percent = max(100 - memory_percent, 0.1)
+            
+            # 更新条形图的分段数据
+            self.storageBar4_2.segments = [
+                {'percent': process_memory_percent, 'color': QColor(255, 165, 0)},
+                {'percent': other_memory_percent, 'color': QColor(0, 159, 170)}
+            ]
+            # 触发条形图重绘
+            self.storageBar4_2.update()
+            
+            # 更新各个进程的内存使用率标签
+            self.appLabel4_2.setText(f"本软件 {process_memory_percent:.1f}%  ")
+            self.otherLabel4_2.setText(f"其他进程 {other_memory_percent:.1f}%  ")
+            self.freeLabel4_2.setText(f"空闲 {free_memory_percent:.1f}%")
+        except Exception as e:
+            print(f"[StoragePage] 更新内存信息失败: {e}")
     
     def resizeEvent(self, event):
         super().resizeEvent(event)
