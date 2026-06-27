@@ -7,7 +7,7 @@ c = (
     '--windows-icon-from-ico=icon.ico ' \
     '--standalone ' \
     '--mingw64 ' \
-    #'--windows-console-mode=disable ' \
+    '--windows-console-mode=disable ' \
     #'--onefile ' \
     '--lto=yes ' \
     '--output-dir=dist ' \

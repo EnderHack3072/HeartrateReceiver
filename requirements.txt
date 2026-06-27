@@ -1,5 +1,7 @@
 PyQt6
 PyQt6-QtWebEngine
 PyQt6-Fluent-Widgets
+PyQt6-Frameless-Window
 bleak
+psutil
 pywin32

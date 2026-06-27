@@ -15,17 +15,17 @@ class DataPage(QFrame):
         self.pivot = Pivot(self)
         self.stackedWidget = QStackedWidget(self)
         
-        self.page01 = QLabel('01', self)
+        self.overviewPage = QLabel('概览', self)
         self.page02 = QLabel('02', self)
         self.page03 = QLabel('03', self)
-        
-        self.addSubInterface(self.page01, 'page01', '01')
+
+        self.addSubInterface(self.overviewPage, 'overviewPage', '概览')
         self.addSubInterface(self.page02, 'page02', '02')
         self.addSubInterface(self.page03, 'page03', '03')
-        
+
         self.stackedWidget.currentChanged.connect(self.onCurrentIndexChanged)
-        self.stackedWidget.setCurrentWidget(self.page01)
-        self.pivot.setCurrentItem(self.page01.objectName())
+        self.stackedWidget.setCurrentWidget(self.overviewPage)
+        self.pivot.setCurrentItem(self.overviewPage.objectName())
         
         self.vBoxLayout.addWidget(self.pivot, 0, Qt.AlignmentFlag.AlignHCenter)
         self.vBoxLayout.addWidget(self.stackedWidget)

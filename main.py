@@ -64,6 +64,7 @@ from func.interfaces.settingspage import SettingsPage
 from func.interfaces.widgetpage import WidgetPage
 from func.interfaces.datapage import DataPage
 from func.interfaces.storagepage import StoragePage
+from func.interfaces.helppage import HelpPage
 
 class HeartRateMonitorWindow(FluentWindow):
     def __init__(self):
@@ -112,10 +113,13 @@ class HeartRateMonitorWindow(FluentWindow):
         self.addSubInterface(self.widgetPage, FluentIcon.ZOOM, "小组件")
         
         self.dataPage = DataPage(self)
-        self.addSubInterface(self.dataPage, FluentIcon.MARKET, "数据")
+        self.addSubInterface(self.dataPage, FluentIcon.MARKET, "数据分析与趋势")
         
         self.storagePage = StoragePage(self)
-        self.addSubInterface(self.storagePage, FluentIcon.FOLDER, "存储")
+        self.addSubInterface(self.storagePage, FluentIcon.SPEED_HIGH, "存储和性能")
+        
+        self.helpPage = HelpPage(self)
+        self.addSubInterface(self.helpPage, FluentIcon.QUESTION, "帮助", NavigationItemPosition.BOTTOM)
 
         from qfluentwidgets import NavigationToolButton
         self.websiteButton = NavigationToolButton(FluentIcon.GLOBE, self)
@@ -305,6 +309,8 @@ def main():
     app = QApplication(sys.argv)
     window = HeartRateMonitorWindow()
     window.show()
+    
+    startup.close_system_splash(startup.syshwnd)
     
     sys.exit(app.exec())
 

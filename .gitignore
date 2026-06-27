@@ -39,6 +39,8 @@ test/
 *.swo
 *~
 data/
+bak/
+test/
 
 # OS
 .DS_Store
