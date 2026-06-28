@@ -97,12 +97,34 @@ class SettingsManager:
     
     def get_device_name(self, address, default=None):
         """获取设备名称"""
-        return self.device_names.get(address, default)
+        device = self.device_names.get(address, default)
+        if isinstance(device, dict):
+            return device.get("name", default)
+        return device
     
     def set_device_name(self, address, name):
         """设置设备名称"""
-        if self.device_names.get(address) != name:
+        device = self.device_names.get(address)
+        if isinstance(device, dict):
+            if device.get("name") != name:
+                device["name"] = name
+                self.save_device_names()
+                print(f"[SettingsManager] 保存设备名称: {address} -> {name}")
+        elif self.device_names.get(address) != name:
             self.device_names[address] = name
             self.save_device_names()
             print(f"[SettingsManager] 保存设备名称: {address} -> {name}")
+
+    def increment_connection_count(self, address):
+        """递增设备的连接成功计数"""
+        if not self.device_names.get(address):
+            self.device_names[address] = {}
+        device = self.device_names[address]
+        if not isinstance(device, dict):
+            device = {"name": device}
+        count = device.get("connection_success_count", 0) + 1
+        device["connection_success_count"] = count
+        self.device_names[address] = device
+        self.save_device_names()
+        print(f"[SettingsManager] 设备连接成功计数: {address} -> {count}")
     

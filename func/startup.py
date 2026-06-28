@@ -1,4 +1,5 @@
 import base64
+import ctypes
 from io import BytesIO
 import win32gui
 import win32api
@@ -8,12 +9,32 @@ from PIL import Image, ImageWin
 from func.resources import STARTUP_PNG
 
 
-def show_system_splash():
-    """创建win32gui系统级轻量闪屏（无QApp依赖，立即显示）"""
+def show_system_splash(pre_aware_width=None):
+    """创建win32gui系统级轻量闪屏（无QApp依赖，立即显示）
+
+    Args:
+        pre_aware_width: 设置DPI感知前的屏幕虚拟宽度，用于计算缩放倍数
+    """
     try:
         image_data = base64.b64decode(STARTUP_PNG)
         image_stream = BytesIO(image_data)
         img = Image.open(image_stream)
+
+        # 通过感知前后的屏幕宽度比值计算DPI缩放倍数
+        # 不依赖任何DPI API，纯数学计算，最可靠
+        scale = 1.0
+        if pre_aware_width:
+            physical_width = win32api.GetSystemMetrics(0)
+            if physical_width and physical_width > pre_aware_width:
+                scale = physical_width / pre_aware_width
+
+        print(f"[Splash] DPI scale: {scale} (pre_aware={pre_aware_width}, "
+              f"physical={physical_width if pre_aware_width else 'N/A'})")
+
+        if scale != 1.0:
+            new_width = max(1, int(img.width * scale))
+            new_height = max(1, int(img.height * scale))
+            img = img.resize((new_width, new_height), Image.LANCZOS)
 
         if img.mode == 'RGBA':
             background = Image.new('RGB', img.size, (255, 255, 255))
@@ -117,6 +138,19 @@ def startup_check():
 
 
 def go():
+    # 必须在 DPI 感知前抓取虚拟屏幕宽度，用于后续计算缩放倍数
+    pre_aware_width = win32api.GetSystemMetrics(0)
+
+    # 主动声明DPI感知，防止Windows虚拟缩放导致闪屏尺寸异常
+    # 必须在创建任何窗口前调用，保证与后续PyQt6的DPI行为一致
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
+    except:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except:
+            pass
+
     global syshwnd
-    syshwnd = show_system_splash()
+    syshwnd = show_system_splash(pre_aware_width)
     startup_check()

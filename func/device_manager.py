@@ -20,6 +20,8 @@ class DeviceManager:
         self.reconnect_timer = QTimer()
         self.reconnect_timer.setSingleShot(True)
         self.reconnect_timer.timeout.connect(self._attempt_reconnect)
+
+        self._first_heart_rate_received = False
     
     def start_scan(self):
         self.discovered_devices.clear()
@@ -197,6 +199,11 @@ class DeviceManager:
             self.window.homePage.progressBar.setCustomBarColor(QColor(196, 43, 28), QColor(160, 30, 15))
         
         self.window.homePage.progressBar.show()
+        
+        # 如果设备已连接，不要修改扫描按钮状态
+        if self.core.monitor_thread and self.core.monitor_thread.isRunning():
+            return
+        
         self.window.homePage.scanButton.setEnabled(True)
         self.window.homePage.scanButton.setText("重新扫描")
     
@@ -206,6 +213,10 @@ class DeviceManager:
         self.window.homePage.progressBar.setValue(100)
         self.window.homePage.progressBar.setCustomBarColor(QColor(196, 43, 28), QColor(160, 30, 15))
         self.window.homePage.progressBar.show()
+        
+        if self.core.monitor_thread and self.core.monitor_thread.isRunning():
+            return
+        
         self.window.homePage.scanButton.setEnabled(True)
         self.window.homePage.scanButton.setText("重新扫描")
         
@@ -231,6 +242,8 @@ class DeviceManager:
             self.window.homePage.progressBar.show()
     
     def connect_device(self):
+        self._first_heart_rate_received = False
+
         if self.window.homePage.listWidget.currentRow() == -1:
             InfoBar.warning(
                 title="请选择设备",
@@ -298,6 +311,7 @@ class DeviceManager:
         
         self.window.homePage.connectButton.setEnabled(False)
         self.window.homePage.disconnectButton.setEnabled(True)
+        self.window.homePage.scanButton.setText("设备已连接，请先断开")
         self.window.homePage.scanButton.setEnabled(False)
         self.window.homePage.checkBox.setEnabled(False)
         self.window.homePage.listWidget.setEnabled(False)
@@ -310,6 +324,11 @@ class DeviceManager:
             self.disconnect_device()
     
     def update_heart_rate(self, heart_rate):
+        if not self._first_heart_rate_received and heart_rate > 0:
+            self._first_heart_rate_received = True
+            if self.core.selected_device:
+                self.settings_manager.increment_connection_count(self.core.selected_device.address)
+
         self.data_manager.collect_data(heart_rate)
         self.memory_share.update_heart_rate(heart_rate)
         
@@ -374,11 +393,11 @@ class DeviceManager:
         
         self.window.homePage.connectButton.setEnabled(True)
         self.window.homePage.disconnectButton.setEnabled(False)
+        self.window.homePage.scanButton.setText("重新扫描")
         self.window.homePage.scanButton.setEnabled(True)
         self.window.homePage.checkBox.setEnabled(True)
         self.window.homePage.listWidget.setEnabled(True)
         self.update_status("已断开连接")
-        self.update_heart_rate(0)
         
         self.user_disconnecting = False
         self.is_disconnecting = False

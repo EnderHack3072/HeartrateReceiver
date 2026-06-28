@@ -8,6 +8,7 @@ from PyQt6.QtGui import QIcon, QPixmap, QAction
 from qfluentwidgets import (InfoBar, InfoBarPosition, FluentWindow, NavigationItemPosition, FluentIcon, IconInfoBadge, InfoBadgePosition, Theme, setTheme, isDarkTheme, qconfig, setThemeColor, MessageBoxBase, SubtitleLabel, PushButton, CheckBox, PrimaryPushButton, ToolTipFilter, ToolTipPosition, SystemThemeListener)
 from func.icon import ICON_ICO
 import sys
+import subprocess
 from qframelesswindow.utils import getSystemAccentColor
 from func.device_manager import DeviceManager
 from func.data_manager import DataManager
@@ -64,8 +65,6 @@ from func.interfaces.settingspage import SettingsPage
 from func.interfaces.widgetpage import WidgetPage
 from func.interfaces.datapage import DataPage
 from func.interfaces.storagepage import StoragePage
-from func.interfaces.helppage import HelpPage
-
 class HeartRateMonitorWindow(FluentWindow):
     def __init__(self):
         super().__init__()
@@ -118,9 +117,6 @@ class HeartRateMonitorWindow(FluentWindow):
         self.storagePage = StoragePage(self)
         self.addSubInterface(self.storagePage, FluentIcon.SPEED_HIGH, "存储和性能")
         
-        self.helpPage = HelpPage(self)
-        self.addSubInterface(self.helpPage, FluentIcon.QUESTION, "帮助", NavigationItemPosition.BOTTOM)
-
         from qfluentwidgets import NavigationToolButton
         self.websiteButton = NavigationToolButton(FluentIcon.GLOBE, self)
         self.websiteButton.installEventFilter(ToolTipFilter(self.websiteButton, showDelay=300, position=ToolTipPosition.TOP))
@@ -129,6 +125,16 @@ class HeartRateMonitorWindow(FluentWindow):
         self.navigationInterface.addWidget(
             routeKey='websiteButton',
             widget=self.websiteButton,
+            position=NavigationItemPosition.BOTTOM
+        )
+        
+        self.helpButton = NavigationToolButton(FluentIcon.QUESTION, self)
+        self.helpButton.installEventFilter(ToolTipFilter(self.helpButton, showDelay=300, position=ToolTipPosition.TOP))
+        self.helpButton.setToolTip("帮助")
+        self.helpButton.clicked.connect(self.on_help_button_clicked)
+        self.navigationInterface.addWidget(
+            routeKey='helpButton',
+            widget=self.helpButton,
             position=NavigationItemPosition.BOTTOM
         )
         
@@ -264,6 +270,10 @@ class HeartRateMonitorWindow(FluentWindow):
         import webbrowser
         webbrowser.open("https://www.nstechcod.top/")
     
+    def on_help_button_clicked(self):
+        """帮助按钮点击事件处理"""
+        subprocess.Popen(["python", "helphtml.py"], cwd="d:\\HeartrateReceiver")
+    
     def closeEvent(self, event):
         # 停止主题监听器线程
         self.themeListener.terminate()
@@ -307,6 +317,14 @@ class HeartRateMonitorWindow(FluentWindow):
     
 def main():
     app = QApplication(sys.argv)
+    
+    # 过滤 qfluentwidgets 字体警告
+    from PyQt6.QtCore import qInstallMessageHandler
+    def _qt_msg_handler(mode, context, message):
+        if "QFont::setPointSize" not in message:
+            print(message)
+    qInstallMessageHandler(_qt_msg_handler)
+    
     window = HeartRateMonitorWindow()
     window.show()
     

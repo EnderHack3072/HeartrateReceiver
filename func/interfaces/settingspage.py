@@ -1,7 +1,10 @@
 from PyQt6.QtWidgets import QFrame, QVBoxLayout
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QWheelEvent
-from qfluentwidgets import ExpandGroupSettingCard, FluentIcon, ComboBox, SwitchButton, IndicatorPosition, PrimaryPushSettingCard, OptionsSettingCard, qconfig, SpinBox, ScrollArea
+import os
+from qfluentwidgets import ExpandGroupSettingCard, FluentIcon, ComboBox, SwitchButton, IndicatorPosition, PrimaryPushSettingCard, OptionsSettingCard, qconfig, SpinBox, ScrollArea, PushButton
+from datetime import datetime
+
 
 class ExitSettingCard(ExpandGroupSettingCard):
     def __init__(self, settings_manager, parent=None):
@@ -180,6 +183,18 @@ class StorageSettingCard(ExpandGroupSettingCard):
         self.viewLayout.setSpacing(0)
 
         self.addGroup(FluentIcon.TRANSPARENT, "每次启动时检查并清理", "启动时自动清理小于5KB的文件（最新文件除外）", self.autoCleanSwitchButton)
+        
+        self.openDirButton = PushButton("选择文件夹")
+        self.openDirButton.clicked.connect(self._open_data_directory)
+        self.addGroup(FluentIcon.DOWNLOAD, "数据保存位置", os.path.abspath('data'), self.openDirButton)
+    
+    def _open_data_directory(self):
+        """打开数据目录"""
+        import subprocess
+        data_dir = os.path.abspath('data')
+        if not os.path.exists(data_dir):
+            os.makedirs(data_dir)
+        subprocess.Popen(['explorer', data_dir])
     
     def on_auto_clean_changed(self, checked):
         self.settings_manager.set("auto_clean_on_startup", checked)
@@ -237,7 +252,8 @@ class SettingsPage(QFrame):
         card.wheelEvent = self.wheelEvent
         self.frameLayout.addWidget(card)
         
-        self.softinfoCard = PrimaryPushSettingCard("检查更新", FluentIcon.INFO, "关于HeartRateReceiver", "2026 EnderHack", self.frame)
+        current_year = datetime.now().year
+        self.softinfoCard = PrimaryPushSettingCard("检查更新", FluentIcon.INFO, "关于HeartRateReceiver", f"©{current_year} EnderHack & SilentStudio\nAll rights reserved.", self.frame)
         self.frameLayout.addWidget(self.softinfoCard)
         
         self.frameLayout.addStretch()
@@ -248,3 +264,11 @@ class SettingsPage(QFrame):
         self.mainLayout.setSpacing(16)
         self.mainLayout.setContentsMargins(20, 20, 20, 20)
         self.mainLayout.addWidget(self.scrollArea)
+    
+    def showEvent(self, event):
+        super().showEvent(event)
+        # 从文件重新加载设置，与其他页面的清理开关同步
+        self.settings_manager.settings = self.settings_manager.load_settings()
+        self.storageSettingCard.autoCleanSwitchButton.setChecked(
+            self.settings_manager.get("auto_clean_on_startup", True)
+        )

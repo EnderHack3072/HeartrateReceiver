@@ -533,6 +533,9 @@ class StoragePage(QFrame):
     def showEvent(self, event):
         super().showEvent(event)
         self.fileRefreshTimer.start(5000)
+        # 从文件重新加载设置，与其他页面的清理开关同步
+        self.settings_manager.settings = self.settings_manager.load_settings()
+        self.autoCleanCheckBox.setChecked(self.settings_manager.get("auto_clean_on_startup", True))
         if hasattr(self, 'cpu_thread') and not self.cpu_thread.isRunning():
             self.cpu_thread.start()
         if hasattr(self, 'memory_thread') and not self.memory_thread.isRunning():
