@@ -598,7 +598,7 @@ class StoragePage(QFrame):
             self.dataManagementCard.setFixedSize(card_width, 100)
 
         total_right_height = page_height - 40
-        treasure_box_card_height = total_right_height / 2
+        treasure_box_card_height = max(total_right_height // 2, 1)
         self.deviceCard.setFixedSize(card_width, treasure_box_card_height)
 
         performance_card_height = total_right_height - treasure_box_card_height - 10

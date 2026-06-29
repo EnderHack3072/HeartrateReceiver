@@ -33,4 +33,4 @@ class CloseConfirmationDialog(MessageBoxBase):
 
     def get_dont_ask_again(self):
         """获取是否不再提示的状态"""
-        return self.dontAskAgainCheckBox.is_checked()
+        return self.dontAskAgainCheckBox.isChecked()
