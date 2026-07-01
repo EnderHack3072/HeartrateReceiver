@@ -106,10 +106,10 @@ class FWSettingCard(ExpandGroupSettingCard):
         event.ignore()
 
 class AutoReconnect(ExpandGroupSettingCard):
-    def __init__(self, settings_manager, device_manager=None, parent=None):
+    def __init__(self, settings_manager, signals=None, parent=None):
         super().__init__(FluentIcon.SETTING, "自动重连", "决定在连接丢失时的行为", parent)
         self.settings_manager = settings_manager
-        self.device_manager = device_manager
+        self.signals = signals
 
         self.switchButton = SwitchButton("否", self, IndicatorPosition.RIGHT)
         self.switchButton.setOnText("是")
@@ -147,29 +147,29 @@ class AutoReconnect(ExpandGroupSettingCard):
     def on_auto_reconnect_changed(self, checked):
         self.settings_manager.set("auto_reconnect_enabled", checked)
         print(f"[Settings] 自动重连: {'启用' if checked else '禁用'}")
-        if self.device_manager and hasattr(self.device_manager, 'core'):
-            self.device_manager.core.auto_reconnect_enabled = checked
-            self.device_manager.core.load_settings()
+        if self.signals:
+            self.signals.settings_changed.emit("auto_reconnect_enabled", checked)
     
     def on_attempts_changed(self, value):
         self.settings_manager.set("auto_reconnect_attempts", value)
         print(f"[Settings] 重连尝试次数: {value}")
-        if self.device_manager and hasattr(self.device_manager, 'core'):
-            self.device_manager.core.max_reconnect_attempts = value
+        if self.signals:
+            self.signals.settings_changed.emit("auto_reconnect_attempts", value)
     
     def on_interval_changed(self, value):
         self.settings_manager.set("auto_reconnect_interval", value)
         print(f"[Settings] 重连间隔: {value}秒")
-        if self.device_manager and hasattr(self.device_manager, 'core'):
-            self.device_manager.core.reconnect_interval = value
+        if self.signals:
+            self.signals.settings_changed.emit("auto_reconnect_interval", value)
     
     def wheelEvent(self, event: QWheelEvent):
         event.ignore()
 
 class StorageSettingCard(ExpandGroupSettingCard):
-    def __init__(self, settings_manager, parent=None):
+    def __init__(self, settings_manager, storage_service=None, parent=None):
         super().__init__(FluentIcon.FOLDER, "存储设置", "设置存储相关的选项", parent)
         self.settings_manager = settings_manager
+        self.storage_service = storage_service
 
         self.autoCleanSwitchButton = SwitchButton("否", self, IndicatorPosition.RIGHT)
         self.autoCleanSwitchButton.setOnText("是")
@@ -189,16 +189,20 @@ class StorageSettingCard(ExpandGroupSettingCard):
         self.addGroup(FluentIcon.DOWNLOAD, "数据保存位置", self._get_data_dir(), self.openDirButton)
     
     def _get_data_dir(self):
+        if self.storage_service:
+            return self.storage_service.get_data_dir()
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         return os.path.join(project_root, 'data')
 
     def _open_data_directory(self):
-        """打开数据目录"""
-        import subprocess
-        data_dir = self._get_data_dir()
-        if not os.path.exists(data_dir):
-            os.makedirs(data_dir)
-        subprocess.Popen(['explorer', data_dir])
+        if self.storage_service:
+            self.storage_service.open_data_directory()
+        else:
+            import subprocess
+            data_dir = self._get_data_dir()
+            if not os.path.exists(data_dir):
+                os.makedirs(data_dir)
+            subprocess.Popen(['explorer', data_dir])
     
     def on_auto_clean_changed(self, checked):
         self.settings_manager.set("auto_clean_on_startup", checked)
@@ -208,14 +212,16 @@ class StorageSettingCard(ExpandGroupSettingCard):
         event.ignore()
 
 class SettingsPage(QFrame):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, settings_manager=None, device_manager=None, signals=None, storage_service=None):
         super().__init__(parent)
         self.setObjectName("settingsPage")
         self.parent_window = parent
+        self.settings_manager = settings_manager
+        self.device_manager = device_manager
+        self.signals = signals
+        self.storage_service = storage_service
         
-        if hasattr(parent, 'settings_manager'):
-            self.settings_manager = parent.settings_manager
-        else:
+        if not self.settings_manager:
             from system.settings.settings_manager import SettingsManager
             self.settings_manager = SettingsManager()
         
@@ -237,13 +243,10 @@ class SettingsPage(QFrame):
         self.fwSettingCard = FWSettingCard(self.settings_manager, self.frame)
         self.frameLayout.addWidget(self.fwSettingCard)
         
-        device_manager = None
-        if hasattr(parent, 'device_manager'):
-            device_manager = parent.device_manager
-        self.autoReconnectCard = AutoReconnect(self.settings_manager, device_manager, self.frame)
+        self.autoReconnectCard = AutoReconnect(self.settings_manager, self.signals, self.frame)
         self.frameLayout.addWidget(self.autoReconnectCard)
         
-        self.storageSettingCard = StorageSettingCard(self.settings_manager, self.frame)
+        self.storageSettingCard = StorageSettingCard(self.settings_manager, self.storage_service, self.frame)
         self.frameLayout.addWidget(self.storageSettingCard)
         
         card = OptionsSettingCard(
@@ -268,11 +271,21 @@ class SettingsPage(QFrame):
         self.mainLayout.setSpacing(16)
         self.mainLayout.setContentsMargins(20, 20, 20, 20)
         self.mainLayout.addWidget(self.scrollArea)
+        
+        if self.signals:
+            self.signals.settings_changed.connect(self.on_settings_changed)
+    
+    def on_settings_changed(self, key, value):
+        if self.device_manager and hasattr(self.device_manager, 'core'):
+            if key == 'auto_reconnect_enabled':
+                self.device_manager.core.auto_reconnect_enabled = value
+            elif key == 'auto_reconnect_attempts':
+                self.device_manager.core.max_reconnect_attempts = value
+            elif key == 'auto_reconnect_interval':
+                self.device_manager.core.reconnect_interval = value
     
     def showEvent(self, event):
         super().showEvent(event)
-        # 从文件重新加载设置，与其他页面的清理开关同步
         self.settings_manager.settings = self.settings_manager.load_settings()
-        self.storageSettingCard.autoCleanSwitchButton.setChecked(
-            self.settings_manager.get("auto_clean_on_startup", True)
-        )
+        auto_clean = self.settings_manager.get("auto_clean_on_startup", True)
+        self.storageSettingCard.autoCleanSwitchButton.setChecked(auto_clean)

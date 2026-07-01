@@ -1,53 +1,9 @@
 import os
-import shutil
-import psutil
 from PyQt6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem
-from PyQt6.QtCore import Qt, QRectF, QTimer, QThread, pyqtSignal
-from PyQt6.QtGui import QPainter, QColor, QBrush, QPainterPath, QIcon
+from PyQt6.QtCore import Qt, QRectF, QTimer
+from PyQt6.QtGui import QPainter, QColor, QBrush, QPainterPath
 from qfluentwidgets import CardWidget, SubtitleLabel, BodyLabel, PushButton, CheckBox, ListWidget, ToolButton, FluentIcon
 
-import random
-
-class CPUInfoThread(QThread):
-    """获取CPU信息的线程"""
-    cpu_info_signal = pyqtSignal(float, float, float)  # 总使用率, 本软件使用率, 其他进程使用率
-
-    def run(self):
-        while True:
-            try:
-                cpu_percent = psutil.cpu_percent(interval=0.1)
-                process_cpu = round(random.uniform(0.1, 1.7), 1)
-                other_cpu = cpu_percent - process_cpu
-                other_cpu = max(other_cpu, 0)
-                self.cpu_info_signal.emit(cpu_percent, process_cpu, other_cpu)
-                self.msleep(400)
-            except Exception as e:
-                print(f"[CPUInfoThread] 获取CPU信息失败: {e}")
-                self.cpu_info_signal.emit(0, 0, 0)
-                self.msleep(400)
-
-class MemoryInfoThread(QThread):
-    """获取内存信息的线程"""
-    memory_info_signal = pyqtSignal(int, int, float, int, float, float)
-
-    def run(self):
-        while True:
-            try:
-                memory = psutil.virtual_memory()
-                total_memory = memory.total
-                used_memory = memory.used
-                memory_percent = memory.percent
-                process = psutil.Process(os.getpid())
-                process_memory = process.memory_info().rss
-                other_memory = used_memory - process_memory
-                process_memory_percent = (process_memory / total_memory) * 100
-                other_memory_percent = (other_memory / total_memory) * 100
-                self.memory_info_signal.emit(total_memory, used_memory, memory_percent, process_memory, process_memory_percent, other_memory_percent)
-                self.msleep(1000)
-            except Exception as e:
-                print(f"[MemoryInfoThread] 获取内存信息失败: {e}")
-                self.memory_info_signal.emit(0, 0, 0, 0, 0, 0)
-                self.msleep(1000)
 
 class StorageBar(QFrame):
     def __init__(self, segments=None, parent=None):
@@ -83,9 +39,14 @@ class StorageBar(QFrame):
                 current_x += seg_width
 
 class StoragePage(QFrame):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, signals=None, storage_service=None, system_monitor=None, settings_manager=None):
         super().__init__(parent)
         self.parent = parent
+        self.signals = signals
+        self.storage_service = storage_service
+        self.system_monitor = system_monitor
+        self.settings_manager = settings_manager
+        
         self.setObjectName("storagePage")
 
         self.mainLayout = QHBoxLayout(self)
@@ -105,34 +66,24 @@ class StoragePage(QFrame):
         self.diskSpaceHeaderLayout.addWidget(self.diskSpaceTitle)
         self.diskSpaceHeaderLayout.addStretch()
 
-        total_space, used_space, used_percent = self._get_disk_space_info()
-        self.diskSpaceTotalLabel = BodyLabel(f"共 {total_space} GB", self.diskSpaceCard)
+        self.diskSpaceTotalLabel = BodyLabel("共 0 GB", self.diskSpaceCard)
         self.diskSpaceTotalLabel.setStyleSheet("font-weight: bold;")
         self.diskSpaceHeaderLayout.addWidget(self.diskSpaceTotalLabel)
 
         self.diskSpaceLayout.addLayout(self.diskSpaceHeaderLayout)
 
-        app_size_gb, app_percent = self._get_app_size_info(total_space)
-        orange_percent = app_percent
-        cyan_percent = used_percent - app_percent
-        segments = [
-            {'percent': orange_percent, 'color': QColor(255, 165, 0)},
-            {'percent': cyan_percent, 'color': QColor(0, 159, 170)}
-        ]
-        self.diskSpaceBar = StorageBar(segments, self.diskSpaceCard)
+        self.diskSpaceBar = StorageBar([], self.diskSpaceCard)
         self.diskSpaceLayout.addWidget(self.diskSpaceBar)
 
         self.diskSpaceInfoLayout = QHBoxLayout()
-        other_data_gb = round(used_space - app_size_gb, 3)
-        free_space = round(total_space - used_space, 3)
 
-        self.softwareSizeLabel = QLabel(f"软件占用 {app_size_gb} GB  ", self.diskSpaceCard)
+        self.softwareSizeLabel = QLabel("软件占用 0 GB  ", self.diskSpaceCard)
         self.softwareSizeLabel.setStyleSheet("color: #FFA500;")
 
-        self.otherDataLabel = QLabel(f"其他数据 {other_data_gb} GB  ", self.diskSpaceCard)
+        self.otherDataLabel = QLabel("其他数据 0 GB  ", self.diskSpaceCard)
         self.otherDataLabel.setStyleSheet("color: #009FAA;")
 
-        self.freeSpaceLabel = QLabel(f"可用 {free_space} GB", self.diskSpaceCard)
+        self.freeSpaceLabel = QLabel("可用 0 GB", self.diskSpaceCard)
         self.freeSpaceLabel.setStyleSheet("color: gray;")
 
         self.diskSpaceInfoLayout.addWidget(self.softwareSizeLabel)
@@ -161,7 +112,6 @@ class StoragePage(QFrame):
         self.dataManagementLayout.addWidget(self.dataManagementContent)
 
         self.fileListWidget = ListWidget(self.dataManagementCard)
-
         self.fileListWidget.setSelectRightClickedRow(True)
 
         self.fileInfoText = BodyLabel("", self.dataManagementCard)
@@ -178,12 +128,9 @@ class StoragePage(QFrame):
         self.fileRefreshTimer = QTimer(self)
         self.fileRefreshTimer.timeout.connect(self.refresh_file_list)
 
-        self.refresh_file_list()
-
         self.autoCleanCheckBox = CheckBox("每次启动时检查并清理", self.dataManagementCard)
-        from system.settings.settings_manager import SettingsManager
-        self.settings_manager = SettingsManager()
-        self.autoCleanCheckBox.setChecked(self.settings_manager.get("auto_clean_on_startup", True))
+        if self.settings_manager:
+            self.autoCleanCheckBox.setChecked(self.settings_manager.get("auto_clean_on_startup", True))
         self.autoCleanCheckBox.stateChanged.connect(self.on_auto_clean_checkbox_changed)
 
         self.dataManagementLayout.addWidget(self.fileListWidget)
@@ -194,7 +141,7 @@ class StoragePage(QFrame):
         self.dataManagementLayout.addSpacing(8)
 
         self.dataDirLayout = QHBoxLayout()
-        self.dataDirLabel = QLabel(f"数据目录：{os.path.abspath('data')}", self.dataManagementCard)
+        self.dataDirLabel = QLabel(f"数据目录：{self.storage_service.get_data_dir() if self.storage_service else 'data'}", self.dataManagementCard)
         self.openDirButton = ToolButton(FluentIcon.FOLDER, self.dataManagementCard)
         self.openDirButton.clicked.connect(self.open_data_directory)
         self.dataDirLayout.addWidget(self.dataDirLabel)
@@ -219,26 +166,20 @@ class StoragePage(QFrame):
         self.cpuHeaderLayout.addWidget(self.cpuTitle)
         self.cpuHeaderLayout.addStretch()
 
-        cpu_percent, process_cpu, other_cpu = self._get_cpu_info()
-
         self.performanceLayout.addLayout(self.cpuHeaderLayout)
 
-        segments = [
-            {'percent': process_cpu, 'color': QColor(255, 165, 0)},
-            {'percent': other_cpu, 'color': QColor(0, 159, 170)}
-        ]
-        self.cpuBar = StorageBar(segments, self.performanceCard)
+        self.cpuBar = StorageBar([], self.performanceCard)
         self.performanceLayout.addWidget(self.cpuBar)
 
         self.cpuInfoLayout = QHBoxLayout()
 
-        self.softwareCpuLabel = QLabel(f"本软件 {process_cpu:.1f}%  ", self.performanceCard)
+        self.softwareCpuLabel = QLabel("本软件 0.0%  ", self.performanceCard)
         self.softwareCpuLabel.setStyleSheet("color: #FFA500;")
 
-        self.otherProcessCpuLabel = QLabel(f"其他进程 {other_cpu:.1f}%  ", self.performanceCard)
+        self.otherProcessCpuLabel = QLabel("其他进程 0.0%  ", self.performanceCard)
         self.otherProcessCpuLabel.setStyleSheet("color: #009FAA;")
 
-        self.idleCpuLabel = QLabel(f"空闲 {100 - cpu_percent:.1f}%", self.performanceCard)
+        self.idleCpuLabel = QLabel("空闲 100.0%", self.performanceCard)
         self.idleCpuLabel.setStyleSheet("color: gray;")
 
         self.cpuInfoLayout.addWidget(self.softwareCpuLabel)
@@ -251,12 +192,6 @@ class StoragePage(QFrame):
         self.cpuNoteLabel = QLabel("*软件的CPU使用率 不保证完全准确 误差1%", self.performanceCard)
         self.performanceLayout.addWidget(self.cpuNoteLabel)
 
-        self.cpu_thread = CPUInfoThread()
-        self.cpu_thread.cpu_info_signal.connect(self.update_cpu_info)
-
-        self.memory_thread = MemoryInfoThread()
-        self.memory_thread.memory_info_signal.connect(self.update_memory_info)
-
         self.performanceLayout.addSpacing(16)
 
         self.memoryHeaderLayout = QHBoxLayout()
@@ -264,26 +199,20 @@ class StoragePage(QFrame):
         self.memoryHeaderLayout.addWidget(self.memoryTitle)
         self.memoryHeaderLayout.addStretch()
 
-        total_memory, used_memory, memory_percent, process_memory, process_memory_percent, other_memory_percent = self._get_memory_info()
-
         self.performanceLayout.addLayout(self.memoryHeaderLayout)
 
-        segments = [
-            {'percent': process_memory_percent, 'color': QColor(255, 165, 0)},
-            {'percent': other_memory_percent, 'color': QColor(0, 159, 170)}
-        ]
-        self.memoryBar = StorageBar(segments, self.performanceCard)
+        self.memoryBar = StorageBar([], self.performanceCard)
         self.performanceLayout.addWidget(self.memoryBar)
 
         self.memoryInfoLayout = QHBoxLayout()
 
-        self.softwareMemoryLabel = QLabel(f"本软件 {process_memory_percent:.1f}%  ", self.performanceCard)
+        self.softwareMemoryLabel = QLabel("本软件 0.0%  ", self.performanceCard)
         self.softwareMemoryLabel.setStyleSheet("color: #FFA500;")
 
-        self.otherProcessMemoryLabel = QLabel(f"其他进程 {other_memory_percent:.1f}%  ", self.performanceCard)
+        self.otherProcessMemoryLabel = QLabel("其他进程 0.0%  ", self.performanceCard)
         self.otherProcessMemoryLabel.setStyleSheet("color: #009FAA;")
 
-        self.idleMemoryLabel = QLabel(f"空闲 {100 - memory_percent:.1f}%", self.performanceCard)
+        self.idleMemoryLabel = QLabel("空闲 100.0%", self.performanceCard)
         self.idleMemoryLabel.setStyleSheet("color: gray;")
 
         self.memoryInfoLayout.addWidget(self.softwareMemoryLabel)
@@ -317,233 +246,93 @@ class StoragePage(QFrame):
         self.mainLayout.addLayout(self.leftLayout, 1)
         self.mainLayout.addLayout(self.rightLayout, 1)
 
+        if self.signals:
+            self.signals.disk_space_updated.connect(self.on_disk_space_updated)
+            self.signals.file_list_updated.connect(self.on_file_list_updated)
+            self.signals.cpu_info_updated.connect(self.update_cpu_info)
+            self.signals.memory_info_updated.connect(self.update_memory_info)
+
         QTimer.singleShot(400, self.initial_refresh)
 
-    def _get_data_dir(self):
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-        return os.path.join(project_root, 'data')
-
-    def _get_disk_space_info(self):
-        try:
-            app_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-            total, used, free = shutil.disk_usage(app_path)
-            total_gb = round(total / (1024 ** 3), 1)
-            used_gb = round(used / (1024 ** 3), 1)
-            used_percent = round(used / total * 100, 1) if total > 0 else 0
-            return total_gb, used_gb, used_percent
-        except Exception as e:
-            print(f"[StoragePage] 获取磁盘空间失败: {e}")
-            return 0, 0, 0
-
-    def _get_app_size_info(self, total_gb):
-        try:
-            app_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-            app_size = self._get_dir_size(app_path)
-            app_size_gb = round(app_size / (1024 ** 3), 3)
-            app_percent = round(app_size_gb / total_gb * 100, 1) if total_gb > 0 else 0
-            return app_size_gb, app_percent
-        except Exception as e:
-            print(f"[StoragePage] 获取软件大小失败: {e}")
-            return 0, 0
-
-    def _get_dir_size(self, path):
-        total_size = 0
-        for dirpath, dirnames, filenames in os.walk(path):
-            for filename in filenames:
-                filepath = os.path.join(dirpath, filename)
-                try:
-                    if os.path.exists(filepath) and not os.pathlink(filepath):
-                        total_size += os.path.getsize(filepath)
-                except Exception:
-                    pass
-        return total_size
-
-    def _get_cpu_info(self):
-        try:
-            cpu_percent = psutil.cpu_percent(interval=0.1)
-            process = psutil.Process(os.getpid())
-            process_cpu = process.cpu_percent(interval=0.1)
-            other_cpu = cpu_percent - process_cpu
-            return cpu_percent, process_cpu, other_cpu
-        except Exception as e:
-            print(f"[StoragePage] 获取CPU信息失败: {e}")
-            return 0, 0, 0
-
-    def _get_memory_info(self):
-        try:
-            memory = psutil.virtual_memory()
-            total_memory = memory.total
-            used_memory = memory.used
-            memory_percent = memory.percent
-            process = psutil.Process(os.getpid())
-            process_memory = process.memory_info().rss
-            other_memory = used_memory - process_memory
-            process_memory_percent = (process_memory / total_memory) * 100
-            other_memory_percent = (other_memory / total_memory) * 100
-            return total_memory, used_memory, memory_percent, process_memory, process_memory_percent, other_memory_percent
-        except Exception as e:
-            print(f"[StoragePage] 获取内存信息失败: {e}")
-            return 0, 0, 0, 0, 0, 0
+    def initial_refresh(self):
+        print("[StoragePage] 执行启动时初始刷新")
+        if self.storage_service:
+            self.storage_service.emit_disk_space_info()
+            self.storage_service.refresh_file_list()
+        if self.system_monitor:
+            self.system_monitor.start_monitoring()
 
     def refresh_file_list(self):
+        if self.storage_service:
+            self.storage_service.refresh_file_list()
+
+    def clean_small_files(self):
+        if self.storage_service:
+            self.storage_service.clean_small_files()
+
+    def on_auto_clean_checkbox_changed(self, state):
+        if self.settings_manager:
+            self.settings_manager.set("auto_clean_on_startup", state == 2)
+
+    def open_data_directory(self):
+        if self.storage_service:
+            self.storage_service.open_data_directory()
+
+    def on_disk_space_updated(self, total_gb, used_gb, used_percent):
+        self.diskSpaceTotalLabel.setText(f"共 {total_gb} GB")
+        
+        if self.storage_service and total_gb > 0:
+            app_size_gb, app_percent = self.storage_service.get_app_size_info(total_gb)
+        else:
+            app_size_gb, app_percent = 0, 0
+            
+        orange_percent = app_percent
+        cyan_percent = used_percent - app_percent
+        if cyan_percent < 0:
+            cyan_percent = 0
+            
+        self.diskSpaceBar.segments = [
+            {'percent': orange_percent, 'color': QColor(255, 165, 0)},
+            {'percent': cyan_percent, 'color': QColor(0, 159, 170)}
+        ]
+        self.diskSpaceBar.update()
+
+        other_data_gb = round(used_gb - app_size_gb, 3)
+        free_space = round(total_gb - used_gb, 3)
+
+        self.softwareSizeLabel.setText(f"软件占用 {app_size_gb} GB  ")
+        self.otherDataLabel.setText(f"其他数据 {other_data_gb} GB  ")
+        self.freeSpaceLabel.setText(f"可用 {free_space} GB")
+
+    def on_file_list_updated(self, files, file_count, size_str, small_files_count):
         self.fileListWidget.clear()
-
-        data_dir = self._get_data_dir()
-
-        try:
-            if os.path.exists(data_dir) and os.path.isdir(data_dir):
-                files = os.listdir(data_dir)
-
-                for file in files:
-                    item = QListWidgetItem(file)
-                    self.fileListWidget.addItem(item)
-
-                file_count = len(files)
-                total_size = 0
-                small_files_count = 0
-
-                latest_file = None
-                if files:
-                    sorted_files = sorted(files, reverse=True)
-                    latest_file = sorted_files[0]
-
-                for file in files:
-                    if file == latest_file:
-                        file_path = os.path.join(data_dir, file)
-                        if os.path.isfile(file_path):
-                            try:
-                                file_size = os.path.getsize(file_path)
-                                total_size += file_size
-                            except Exception:
-                                pass
-                        continue
-
-                    file_path = os.path.join(data_dir, file)
-                    if os.path.isfile(file_path):
-                        try:
-                            file_size = os.path.getsize(file_path)
-                            total_size += file_size
-                            if file_size < 5 * 1024:
-                                small_files_count += 1
-                        except Exception:
-                            pass
-
-                if total_size < 1024:
-                    size_str = f"{total_size} B"
-                elif total_size < 1024 * 1024:
-                    size_str = f"{total_size / 1024:.2f} KB"
-                elif total_size < 1024 * 1024 * 1024:
-                    size_str = f"{total_size / (1024 * 1024):.2f} MB"
-                else:
-                    size_str = f"{total_size / (1024 * 1024 * 1024):.2f} GB"
-
-                self.fileInfoText.setText(f"共{file_count}个文件，占用{size_str}磁盘空间")
-
-                self.cleanSuggestionText.setText(f"检测到{small_files_count}个建议清理的文件")
-            else:
-                item = QListWidgetItem("data文件夹不存在")
+        
+        if files:
+            for file in files:
+                item = QListWidgetItem(file)
                 self.fileListWidget.addItem(item)
-                self.fileInfoText.setText("")
-                self.cleanSuggestionText.setText("")
-        except Exception as e:
-            item = QListWidgetItem(f"获取文件列表失败: {e}")
+            self.fileInfoText.setText(f"共{file_count}个文件，占用{size_str}磁盘空间")
+            self.cleanSuggestionText.setText(f"检测到{small_files_count}个建议清理的文件")
+        else:
+            item = QListWidgetItem("data文件夹为空")
             self.fileListWidget.addItem(item)
             self.fileInfoText.setText("")
             self.cleanSuggestionText.setText("")
 
-    def on_auto_clean_checkbox_changed(self, state):
-        self.settings_manager.set("auto_clean_on_startup", state == 2)
-
-    def clean_small_files(self):
-        data_dir = self._get_data_dir()
-
-        try:
-            if os.path.exists(data_dir) and os.path.isdir(data_dir):
-                files = os.listdir(data_dir)
-                cleaned_count = 0
-
-                latest_file = None
-                if files:
-                    sorted_files = sorted(files, reverse=True)
-                    latest_file = sorted_files[0]
-
-                for file in files:
-                    if file == latest_file:
-                        continue
-
-                    file_path = os.path.join(data_dir, file)
-                    if os.path.isfile(file_path):
-                        try:
-                            file_size = os.path.getsize(file_path)
-                            if file_size < 5 * 1024:
-                                os.remove(file_path)
-                                cleaned_count += 1
-                        except Exception:
-                            pass
-
-                self.refresh_file_list()
-        except Exception as e:
-            print(f"清理文件失败: {e}")
-
-    def open_data_directory(self):
-        """打开数据目录"""
-        import subprocess
-        data_dir = self._get_data_dir()
-        if not os.path.exists(data_dir):
-            os.makedirs(data_dir)
-        subprocess.Popen(['explorer', data_dir])
-
-    def initial_refresh(self):
-        print("[StoragePage] 执行启动时初始刷新")
-
-        try:
-            total_space, used_space, used_percent = self._get_disk_space_info()
-            self.diskSpaceTotalLabel.setText(f"共 {total_space} GB")
-
-            app_size_gb, app_percent = self._get_app_size_info(total_space)
-            orange_percent = app_percent
-            cyan_percent = used_percent - app_percent
-
-            self.diskSpaceBar.segments = [
-                {'percent': orange_percent, 'color': QColor(255, 165, 0)},
-                {'percent': cyan_percent, 'color': QColor(0, 159, 170)}
-            ]
-            self.diskSpaceBar.update()
-
-            other_data_gb = round(used_space - app_size_gb, 3)
-            free_space = round(total_space - used_space, 3)
-
-            self.softwareSizeLabel.setText(f"软件占用 {app_size_gb} GB  ")
-            self.otherDataLabel.setText(f"其他数据 {other_data_gb} GB  ")
-            self.freeSpaceLabel.setText(f"可用 {free_space} GB")
-        except Exception as e:
-            print(f"[StoragePage] 初始刷新磁盘空间失败: {e}")
-
-        if hasattr(self, 'cpu_thread') and not self.cpu_thread.isRunning():
-            self.cpu_thread.start()
-        if hasattr(self, 'memory_thread') and not self.memory_thread.isRunning():
-            self.memory_thread.start()
-
-        self.refresh_file_list()
-
     def hideEvent(self, event):
         super().hideEvent(event)
         self.fileRefreshTimer.stop()
-        if hasattr(self, 'cpu_thread'):
-            self.cpu_thread.terminate()
-        if hasattr(self, 'memory_thread'):
-            self.memory_thread.terminate()
+        if self.system_monitor:
+            self.system_monitor.stop_monitoring()
 
     def showEvent(self, event):
         super().showEvent(event)
         self.fileRefreshTimer.start(5000)
-        # 从文件重新加载设置，与其他页面的清理开关同步
-        self.settings_manager.settings = self.settings_manager.load_settings()
-        self.autoCleanCheckBox.setChecked(self.settings_manager.get("auto_clean_on_startup", True))
-        if hasattr(self, 'cpu_thread') and not self.cpu_thread.isRunning():
-            self.cpu_thread.start()
-        if hasattr(self, 'memory_thread') and not self.memory_thread.isRunning():
-            self.memory_thread.start()
+        if self.settings_manager:
+            self.settings_manager.settings = self.settings_manager.load_settings()
+            self.autoCleanCheckBox.setChecked(self.settings_manager.get("auto_clean_on_startup", True))
+        if self.system_monitor:
+            self.system_monitor.start_monitoring()
 
     def update_cpu_info(self, cpu_percent, process_cpu, other_cpu):
         try:

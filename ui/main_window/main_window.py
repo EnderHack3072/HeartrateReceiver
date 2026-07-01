@@ -22,11 +22,14 @@ from ui.pages.settings.settings_page import SettingsPage
 from ui.pages.widget.widget_page import WidgetPage
 from ui.pages.data.data_page import DataPage
 from ui.pages.storage.storage_page import StoragePage
+from ui.services.app_signals import AppSignals
 from core.device.device_manager import DeviceManager
 from persistence.manager.data_manager import DataManager
 from persistence.manager.file_cleaner import FileCleaner
 from system.memory.shared_memory import MemoryShareManager
 from system.settings.settings_manager import SettingsManager
+from system.monitor.system_monitor import SystemMonitor
+from system.monitor.storage_service import StorageService
 
 
 class HeartRateMonitorWindow(FluentWindow):
@@ -49,8 +52,23 @@ class HeartRateMonitorWindow(FluentWindow):
 
         self.memory_share = MemoryShareManager()
         self.memory_share.initialize()
+        
+        self.signals = AppSignals()
+        print("[AppSignals] 全局信号已初始化")
 
-        self.device_manager = DeviceManager(self)
+        self.device_manager = DeviceManager(
+            self.settings_manager, 
+            self.data_manager, 
+            self.memory_share,
+            self.signals
+        )
+        print("[DeviceManager] 设备管理器已初始化")
+        
+        self.storage_service = StorageService(self.signals)
+        print("[StorageService] 存储服务已初始化")
+        
+        self.system_monitor = SystemMonitor(self.signals)
+        print("[SystemMonitor] 系统监控已初始化")
 
         if sys.platform in ["win32", "darwin"]:
             try:
@@ -70,7 +88,7 @@ class HeartRateMonitorWindow(FluentWindow):
 
         self.initWindow()
 
-        self.homePage = HomePage(self)
+        self.homePage = HomePage(self, self.signals, self.device_manager._get_stable_device_name)
         self.addSubInterface(self.homePage, FluentIcon.HOME, "主页")
 
         self.widgetPage = WidgetPage(self)
@@ -79,7 +97,13 @@ class HeartRateMonitorWindow(FluentWindow):
         self.dataPage = DataPage(self)
         self.addSubInterface(self.dataPage, FluentIcon.MARKET, "数据分析与趋势")
 
-        self.storagePage = StoragePage(self)
+        self.storagePage = StoragePage(
+            self, 
+            self.signals, 
+            self.storage_service, 
+            self.system_monitor,
+            self.settings_manager
+        )
         self.addSubInterface(self.storagePage, FluentIcon.SPEED_HIGH, "存储和性能")
 
         self.websiteButton = NavigationToolButton(FluentIcon.GLOBE, self)
@@ -102,8 +126,19 @@ class HeartRateMonitorWindow(FluentWindow):
             position=NavigationItemPosition.BOTTOM
         )
 
-        self.settingsPage = SettingsPage(self)
+        self.settingsPage = SettingsPage(
+            self, 
+            self.settings_manager, 
+            self.device_manager,
+            self.signals,
+            self.storage_service
+        )
         self.addSubInterface(self.settingsPage, FluentIcon.SETTING, "设置", NavigationItemPosition.BOTTOM)
+
+        # 连接 UI 动作信号 → DeviceManager（HomePage 不再直接引用 DeviceManager）
+        self.signals.scan_requested.connect(self.device_manager.start_scan)
+        self.signals.connect_requested.connect(self.device_manager.connect_device)
+        self.signals.disconnect_requested.connect(self.device_manager.disconnect_device)
 
         if self.settings_manager.get("auto_clean_on_startup", True):
             print("[AutoClean] 启动时自动清理小文件")
@@ -140,6 +175,12 @@ class HeartRateMonitorWindow(FluentWindow):
 
     def exit_application(self):
         print("[Cleanup] 开始清理资源")
+        try:
+            self.themeListener.terminate()
+            self.themeListener.deleteLater()
+        except RuntimeError:
+            pass
+        print("[Theme] 系统主题监听器已停止")
         self.data_manager.flush_data()
         print("[DataManager] 数据已保存")
         self.memory_share.close()
@@ -155,12 +196,6 @@ class HeartRateMonitorWindow(FluentWindow):
 
         print(f"[Theme] 主题已切换为: {'深色' if isDarkTheme() else '浅色'}")
 
-    def connect_device(self):
-        self.device_manager.connect_device()
-
-    def disconnect_device(self):
-        self.device_manager.disconnect_device()
-
     def on_custom_button_clicked(self):
         webbrowser.open("https://www.nstechcod.top/")
 
@@ -168,10 +203,6 @@ class HeartRateMonitorWindow(FluentWindow):
         subprocess.Popen(["python", "helphtml.py"], cwd="d:\\HeartrateReceiver")
 
     def closeEvent(self, event):
-        self.themeListener.terminate()
-        self.themeListener.deleteLater()
-        print("[Theme] 系统主题监听器已停止")
-
         show_confirmation = self.settings_manager.get("show_close_confirmation", True)
         close_behavior = self.settings_manager.get("close_behavior", "minimize")
 
